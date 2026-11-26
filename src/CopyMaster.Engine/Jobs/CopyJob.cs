@@ -61,6 +61,7 @@ public sealed class CopyJob : IDisposable
     internal Action<string, string>? BeforeCopy { get; init; } // (source, temporary file)
     internal Action<string>? BeforeVerify { get; init; }       // (temporary file)
     internal Func<string, long?>? FreeSpace { get; init; }     // (destination) → bytes free
+    internal Func<uint, ClipboardOutcome> EmptyClipboard { get; init; } = CutPaste.EmptyClipboardIfUnchanged;
 
     private int Stages => _options.Verify ? 2 : 1;
 
@@ -81,6 +82,7 @@ public sealed class CopyJob : IDisposable
             CheckRoom(_plan.Items);
             Execute(_plan.Items);
             Finish();
+            CompleteCut();
         }
         catch (OperationCanceledException)
         {
@@ -128,6 +130,7 @@ public sealed class CopyJob : IDisposable
             }
             Execute(items);
             Finish();
+            CompleteCut();
         }
         catch (OperationCanceledException)
         {
@@ -139,6 +142,16 @@ public sealed class CopyJob : IDisposable
             SetPhase(JobPhase.Done);
         }
         return _result;
+    }
+
+    /// <summary>
+    /// A cut in Explorer pasted with CopyMaster Paste: once all of it has moved, empty the clipboard
+    /// as Explorer would, if it still holds that cut (<see cref="CutPaste"/>). Run and RetryFailed
+    /// both end here, so a cut whose last failures are retried successfully is finished too.
+    /// </summary>
+    private void CompleteCut()
+    {
+        if (CutPaste.Completes(_spec, _result)) _result.Clipboard = EmptyClipboard(_spec.ClipboardSequence!.Value);
     }
 
     /// <summary>

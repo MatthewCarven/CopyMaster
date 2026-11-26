@@ -27,6 +27,9 @@ internal static class ShellBuild
 
     public static string? Host => Built(Path.Combine("tools", "ShellHost", "bin", "x64", Configuration, "ShellHost.exe"));
 
+    /// <summary>cmcopy.exe, the real engine for the end-to-end paste tests (the tests project builds it).</summary>
+    public static string? Engine => Built(Path.Combine("src", "CopyMaster.Cli", "bin", Configuration, "net10.0-windows", "cmcopy.exe"));
+
     public static string? Missing => Dll is null || Host is null
         ? $"CopyMasterShell.dll or ShellHost.exe ({Configuration}) isn't built: run .\\build.ps1."
         : null;
@@ -53,6 +56,16 @@ public sealed class ShellFactAttribute : FactAttribute
     public ShellFactAttribute()
     {
         if (ShellBuild.Missing is string reason) Skip = reason;
+    }
+}
+
+/// <summary>A shell test that also runs the real engine (cmcopy.exe).</summary>
+public sealed class ShellEngineFactAttribute : FactAttribute
+{
+    public ShellEngineFactAttribute()
+    {
+        if (ShellBuild.Missing is string reason) Skip = reason;
+        else if (ShellBuild.Engine is null) Skip = "cmcopy.exe isn't built: run .\\build.ps1 (or dotnet build src\\CopyMaster.Cli).";
     }
 }
 
@@ -100,9 +113,19 @@ public sealed partial class ShellExtensionTests
         public IEnumerable<string> Items => Lines.Where(l => l.StartsWith("item ", StringComparison.Ordinal));
 
         public string? Line(string prefix) => Lines.FirstOrDefault(l => l.StartsWith(prefix + " ", StringComparison.Ordinal));
+
+        /// <summary>Each "clipboard &lt;sequence number&gt; &lt;files|text|empty|other&gt;" line, in order.</summary>
+        public IReadOnlyList<(uint Sequence, string Holds)> Clipboard => Lines
+            .Where(l => l.StartsWith("clipboard ", StringComparison.Ordinal))
+            .Select(l => l.Split(' '))
+            .Select(p => (uint.Parse(p[1], System.Globalization.CultureInfo.InvariantCulture), p[2]))
+            .ToList();
     }
 
-    private static Run Host(string command, string app, string target, IEnumerable<string> sources, params string[] options)
+    private static Run Host(string command, string app, string target, IEnumerable<string> sources, params string[] options) =>
+        RunHost([command, "--dll", Path.Combine(app, "CopyMasterShell.dll"), "--target", target, .. options, .. sources]);
+
+    private static Run RunHost(IEnumerable<string> arguments, string? engine = null)
     {
         var start = new ProcessStartInfo(ShellBuild.Host!)
         {
@@ -111,10 +134,8 @@ public sealed partial class ShellExtensionTests
             RedirectStandardOutput = true,
             StandardOutputEncoding = Encoding.UTF8,
         };
-        foreach (string arg in (string[])[command, "--dll", Path.Combine(app, "CopyMasterShell.dll"), "--target", target, .. options, .. sources])
-        {
-            start.ArgumentList.Add(arg);
-        }
+        foreach (string arg in arguments) start.ArgumentList.Add(arg);
+        if (engine is not null) start.Environment["CM_SHELLHOST_ENGINE"] = engine;
         using var process = Process.Start(start)!;
         string output = process.StandardOutput.ReadToEnd();
         if (!process.WaitForExit(30_000))

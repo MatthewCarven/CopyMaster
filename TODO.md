@@ -163,13 +163,33 @@
 - [ ] 7-Zip's right-drag items are registered under Directory and Drive only, so they may not show on
       the Desktop. Nothing to do with CopyMaster; just a thing seen in the registry.
 
-## Phase 4: right-click Paste
+## Phase 4: right-click Paste, built 2026-11-27
 
-- [ ] Paste handler on `Directory\Background`, `Directory`, `Drive`; hidden when the clipboard
-      has no files.
-- [ ] Cut (`Preferred DropEffect` = move) becomes a move; empty the clipboard after the move
-      if its sequence number hasn't changed.
-- [ ] Matthew: paste a copy and a cut, into a folder's background, onto a folder, onto a drive.
+- [x] Paste handler (`PasteHandler`, its own CLSID) on `Directory\Background` (the Desktop's background
+      too), `Directory`, `Drive`; hidden when the clipboard has no files (only the list of formats is
+      read to show it); a right-click with two folders selected gets none, as Explorer's own Paste.
+- [x] The click reads the clipboard on a thread of its own, for at most 3 s, answering only sent
+      messages meanwhile: a hung clipboard owner can't hang Explorer (tested: the click gives up at 3.0 s).
+- [x] Cut (`Preferred DropEffect` = move, without copy) becomes a move whose job carries `clipseq`; the
+      engine empties the clipboard after the move if that number hasn't changed and something moved
+      (`CutPaste`, at the end of `CopyJob.Run` and `RetryFailed`, so CopyMaster.exe and cmcopy both do).
+- [x] Shared pieces split out of the drag-drop handler: `ContextMenu.*` (menu items), `Folders.*`
+      (where to copy to); `JobLauncher` takes the clipboard number.
+- [x] `ShellHost isolated` (a window station of its own: no test touches the real clipboard), `--paste`,
+      `--clip copy|cut|text|empty|hung`, and an end-to-end mode through the real cmcopy.
+- [ ] **Matthew: copy and cut some files in Explorer, then right-click a folder, a folder's background
+      and the Desktop, and choose CopyMaster Paste** ("Show more options" on Windows 11, or
+      Shift+right-click). After a cut, Explorer's own Paste should be greyed once CopyMaster has moved
+      the files. Needs a deploy first (`.\dev\reload.ps1`), which restarts Explorer since it has the
+      old DLL loaded.
+
+## Ideas surfaced in phase 4 (not decided)
+
+- [ ] **Paste a copy into its own folder** does nothing (as a right-drag there does). Explorer makes
+      "X - Copy"; that's the usual way to duplicate a file, so maybe a copy into its own folder should
+      make "X - Copy" after all, at least from Paste. Matthew's call.
+- [ ] The item could say "CopyMaster Paste (move)" after a cut, but knowing that means reading the
+      clipboard while the menu is built, which could hang on a hung owner. Left as one label.
 
 ## Phase 5: Windows 11 compact menu, installer
 

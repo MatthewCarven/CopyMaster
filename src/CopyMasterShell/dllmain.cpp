@@ -5,10 +5,10 @@
 // CopyMaster.exe; it never touches file contents (PLAN.md, "Why two parts").
 //
 //   DragDropHandler.*   the right-drag menu (phase 3)
+//   PasteHandler.*      the right-click menu's Paste (phase 4); Clipboard.* reads the clipboard
+//   ContextMenu.*, Folders.*  what the two share: menu items, where to copy to
 //   JobLauncher.*       writes the job file and starts CopyMaster.exe beside this DLL
 //   Registration.*      HKLM registration for regsvr32
-//
-// Phase 4 adds the paste handler as another CoCreatableClass.
 //
 // No DllMain: the CRT's default is enough, and with the static CRT this DLL must
 // not call DisableThreadLibraryCalls.

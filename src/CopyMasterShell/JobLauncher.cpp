@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <memory>
 #include <new>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -25,27 +26,6 @@ struct Failure
     HRESULT result = S_OK;
     std::wstring message;
 };
-
-std::wstring SystemMessage(HRESULT result)
-{
-    PWSTR text = nullptr;
-    DWORD length = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                                      FORMAT_MESSAGE_IGNORE_INSERTS,
-                                  nullptr, static_cast<DWORD>(result), 0, reinterpret_cast<PWSTR>(&text), 0, nullptr);
-    if (length == 0 || text == nullptr)
-    {
-        wchar_t code[32];
-        swprintf_s(code, L"Error 0x%08X.", static_cast<unsigned>(result));
-        return code;
-    }
-    std::wstring message(text, length);
-    LocalFree(text);
-    while (!message.empty() && (message.back() == L'\n' || message.back() == L'\r' || message.back() == L' '))
-    {
-        message.pop_back();
-    }
-    return message;
-}
 
 // Appends `text` as UTF-8. False if it isn't valid UTF-16 (a lone surrogate, which NTFS allows in a
 // name): UTF-8 can't carry that, so the engine would look for a different name.
@@ -73,12 +53,13 @@ bool AppendLine(std::string& out, const char* key, const std::wstring& value)
 // The job in JobFile's format: a header, then key=value lines. Names can't hold line breaks, so
 // nothing needs escaping, and a value may contain '=' (only the first one splits).
 Failure FormatJob(Operation operation, const std::wstring& destination, const std::vector<std::wstring>& sources,
-                  std::string& text)
+                  std::optional<DWORD> clipboardSequence, std::string& text)
 {
     text = kHeader;
     text += operation == Operation::Move ? "op=move\n" : "op=copy\n";
     const std::wstring* bad = nullptr;
     if (!AppendLine(text, "dest", destination)) bad = &destination;
+    if (clipboardSequence) text += "clipseq=" + std::to_string(*clipboardSequence) + "\n";
     for (const std::wstring& source : sources)
     {
         if (bad == nullptr && !AppendLine(text, "src", source)) bad = &source;
@@ -184,10 +165,11 @@ Failure StartEngine(const std::wstring& folder, const std::wstring& exe, const s
     return {};
 }
 
-Failure Start(Operation operation, const std::wstring& destination, const std::vector<std::wstring>& sources)
+Failure Start(Operation operation, const std::wstring& destination, const std::vector<std::wstring>& sources,
+              std::optional<DWORD> clipboardSequence)
 {
     std::string text;
-    Failure failure = FormatJob(operation, destination, sources, text);
+    Failure failure = FormatJob(operation, destination, sources, clipboardSequence, text);
     if (FAILED(failure.result)) return failure;
 
     // Find the exe before writing anything, so a broken install leaves no job file.
@@ -211,11 +193,11 @@ Failure Start(Operation operation, const std::wstring& destination, const std::v
 } // namespace
 
 HRESULT StartJob(Operation operation, const std::wstring& destination, const std::vector<std::wstring>& sources,
-                 HWND owner, bool quiet) noexcept
+                 std::optional<DWORD> clipboardSequence, HWND owner, bool quiet) noexcept
 {
     try
     {
-        Failure failure = Start(operation, destination, sources);
+        Failure failure = Start(operation, destination, sources, clipboardSequence);
         if (FAILED(failure.result) && !quiet)
         {
             MessageBoxW(owner, failure.message.c_str(), L"CopyMaster", MB_OK | MB_ICONERROR);

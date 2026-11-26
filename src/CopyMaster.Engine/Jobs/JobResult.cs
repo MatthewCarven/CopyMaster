@@ -59,6 +59,12 @@ public sealed class JobResult
 
     public TimeSpan Elapsed { get; internal set; }
 
+    /// <summary>
+    /// For a cut pasted with CopyMaster Paste that moved everything: what happened to the clipboard
+    /// (<see cref="CutPaste"/>). Null for every other job.
+    /// </summary>
+    public ClipboardOutcome? Clipboard { get; internal set; }
+
     public bool Succeeded => !Cancelled && StoppedReason is null && _failures.Count == 0;
 
     internal void Add(FailedItem failure) => _failures.Add(failure);

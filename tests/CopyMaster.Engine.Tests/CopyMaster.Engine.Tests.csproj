@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CopyMaster.Engine\CopyMaster.Engine.csproj" />
+    <!-- Built, not referenced: the end-to-end paste tests run cmcopy.exe from its own bin folder. -->
+    <ProjectReference Include="..\..\src\CopyMaster.Cli\CopyMaster.Cli.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
 
 </Project>

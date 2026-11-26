@@ -177,4 +177,22 @@ internal static unsafe partial class NativeMethods
 
     [LibraryImport("shell32.dll")]
     internal static partial void SHChangeNotify(int eventId, uint flags, char* item1, nint item2);
+
+    // ---- The clipboard (finishing a cut) --------------------------------------------------
+
+    /// <summary>Changes whenever the clipboard's contents do; 0 without access to it.</summary>
+    [LibraryImport("user32.dll")]
+    internal static partial uint GetClipboardSequenceNumber();
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool OpenClipboard(nint newOwner);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool EmptyClipboard();
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool CloseClipboard();
 }

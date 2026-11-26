@@ -81,17 +81,25 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Clipboard.cpp" />
+    <ClCompile Include="ContextMenu.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="DragDropHandler.cpp" />
     <ClCompile Include="JobLauncher.cpp" />
+    <ClCompile Include="Folders.cpp" />
     <ClCompile Include="Module.cpp" />
+    <ClCompile Include="PasteHandler.cpp" />
     <ClCompile Include="Registration.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Clipboard.h" />
     <ClInclude Include="Clsids.h" />
+    <ClInclude Include="ContextMenu.h" />
     <ClInclude Include="DragDropHandler.h" />
+    <ClInclude Include="Folders.h" />
     <ClInclude Include="JobLauncher.h" />
     <ClInclude Include="Module.h" />
+    <ClInclude Include="PasteHandler.h" />
     <ClInclude Include="Registration.h" />
   </ItemGroup>
   <ItemGroup>

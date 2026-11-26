@@ -53,16 +53,36 @@ also runs from a command line, so most of the testing never involves Explorer.
   drop target is the namespace root, whose file-system path is the Desktop folder, so it
   qualifies; `Folder` makes sure Explorer asks us there (Windows' own zip right-drag handlers
   are under `Folder`).
-- **Paste handler**: registered under `Directory\Background\shellex\ContextMenuHandlers`
-  (paste here), `Directory\shellex\ContextMenuHandlers` (paste into that folder) and
-  `Drive\shellex\ContextMenuHandlers`. It reads the clipboard: `CF_HDROP` for the paths
-  and `Preferred DropEffect` for Cut (`DROPEFFECT_MOVE`) or Copy. If the clipboard holds
-  no files, the item is hidden rather than greyed.
+- **Paste handler** (built in phase 4; CLSID `{355681EC-9621-450F-8449-6B5769A1149B}`):
+  registered under `Directory\Background\shellex\ContextMenuHandlers` (paste here; this key
+  serves the Desktop's background too, as Windows' own "New" and NVIDIA's desktop items show),
+  `Directory\shellex\ContextMenuHandlers` (paste into that folder) and
+  `Drive\shellex\ContextMenuHandlers`. On a background, Initialize gets the folder; on an item,
+  the selection, which must be one file-system folder or drive (as for Explorer's own Paste). If
+  the clipboard holds no files, the item is hidden rather than greyed.
+- **The clipboard can't be allowed to hang Explorer.** Its data usually isn't there yet:
+  Explorer's Copy, like most programs', promises each format (delayed rendering), and the first
+  reader makes the owner produce it with a message sent to the owner's window, so a hung owner
+  hangs the reader. So showing the menu asks only `IsClipboardFormatAvailable(CF_HDROP)`, which
+  reads the list of formats. The click reads `CF_HDROP` and `Preferred DropEffect` on a thread of
+  its own, for at most 3 s; the UI thread meanwhile answers only messages sent to it (the owner
+  may be a window on that very thread: files copied in the same Explorer window), nothing posted
+  and no input. A timeout says so in a message box. Cut means `DROPEFFECT_MOVE` without
+  `DROPEFFECT_COPY` (Explorer's Copy offers COPY | LINK), so a program offering both is copied.
 - **Cut, then paste**: Explorer empties the clipboard once a cut has been pasted. The move
   finishes later, in the engine, so the DLL records the clipboard's sequence number
-  (`GetClipboardSequenceNumber`) in the job. When the move succeeds, the engine empties
-  the clipboard only if that number hasn't changed (so it never wipes something Matthew
-  copied since).
+  (`GetClipboardSequenceNumber`) in the job (`clipseq`, for cuts only). It's taken before opening
+  the clipboard and after closing it, and kept only if it held still, so it names exactly what was
+  read (producing a delayed format could move it on; in practice it didn't). When the move has
+  gone through (no failures, and something moved or was already there), the engine opens the
+  clipboard, and empties it only if the number is still the same (so it never wipes something
+  Matthew copied since); on a thread of its own, for at most 2 s, since emptying tells the old
+  owner. A cut pasted into its own folder moves nothing, so it stays on the clipboard. A retry
+  that finishes the move empties it then. The source isn't told (`CFSTR_PASTESUCCEEDED`): the
+  files have moved already, and Explorer clears its cut look when the clipboard changes.
+- **Paste a copy into its own folder** does nothing, as a right-drag there does (Explorer would
+  make "X - Copy"). The DLL can't hide the item for it: knowing where the files are means reading
+  the clipboard, which showing the menu mustn't do.
 - **Job file**: UTF-8 lines: the operation, the destination, then one source path per
   line, plus the clipboard sequence number for cut-pastes. Windows file names can't
   contain line breaks, so lines are safe and need no JSON code in C++.
@@ -84,6 +104,12 @@ also runs from a command line, so most of the testing never involves Explorer.
   the taskbar for a moment**, so Claude says so before running it. `tools\ShellHost` is a
   small C++ program that loads the DLL and drives its handlers with a fake data object, so
   most DLL changes can be tested without restarting Explorer at all.
+- **No test touches the real clipboard.** The clipboard belongs to the window station, so
+  `ShellHost isolated` makes a window station and desktop of its own and runs the paste tests
+  there (ShellHost refuses to set the clipboard anywhere else). A job object keeps that window
+  station until everything started inside it has ended, the engine included. For the end-to-end
+  tests the fake engine hands the job to the real cmcopy.exe, which moves the files and empties
+  (or leaves) the private clipboard.
 
 ### The engine (CopyMaster.exe)
 
@@ -204,7 +230,7 @@ Each is about one session. Phases 1 and 2 never touch Explorer.
 | 1b | The same for real: across volumes (a VHDX), to the desktop share (chunk sizes, the SMB verify question), a genuinely full disk | Done 2026-11-26: 10 opt-in integration tests pass on two VHDXs and the share |
 | 2 | Engine UI: queue window, progress, live speed slider, pause, conflict dialog, error list, summary, single instance + named pipe, queue per drive, settings, dark mode | Matthew has run real copies and moves through the window. Built 2026-11-26 (122 tests, an end-to-end UI Automation check); his run is still to come |
 | 3 | Shell DLL, right-drag: handler, job file, launching the engine, registration, `dev\reload.ps1`, ShellHost | Done 2026-11-26: Matthew right-dragged files in Explorer and got CopyMaster (no Explorer restart needed). A drop into the items' own folder now does nothing (20 ShellHost tests) |
-| 4 | Right-click Paste: handler on folder, background and drive, clipboard read, cut → move, clipboard emptied after a cut | Matthew has pasted a copy and a cut in Explorer |
+| 4 | Right-click Paste: handler on folder, background and drive, clipboard read, cut → move, clipboard emptied after a cut | Matthew has pasted a copy and a cut in Explorer. Built 2026-11-27 (ShellHost on a private window station, end to end through cmcopy); his run is still to come |
 | 5 | Windows 11 compact menu (`IExplorerCommand` + a self-signed sparse package), installer and uninstaller, icons | Paste appears in the compact menu; uninstall leaves nothing behind |
 
 Testing moves between volumes needs a second volume: the laptop has only C:. A small
@@ -214,8 +240,9 @@ VHDX made and attached with `diskpart` works on Windows Home (no Hyper-V needed)
 
 - ~~HKLM vs HKCU registration with Explorer elevated~~: settled in phase 3 (HKLM; HKCU would
   work here too, since UAC is off).
-- The Desktop as a paste target (phase 4): which keys it needs. As a right-drag target it's the
-  namespace root, covered by `Folder` (phase 3).
+- ~~The Desktop as a paste target~~: `Directory\Background` serves the Desktop's background (Windows'
+  own "New" and NVIDIA's desktop items are registered there); ShellHost shows the root gives the
+  Desktop folder. Matthew's hand test settles it.
 - **The `=` in `-=Programming=-` breaks link.exe's `/LIBPATH`** (found building Terminal,
   2026-10-16). The DLL links only Windows SDK libraries, which live outside this folder.
   Don't add a static-library project here without allowing for that.

@@ -363,3 +363,81 @@ The same screenshot shows a real queue: Copy "Westworld" (18.9 GB, 134 items) in
 `Desktop\-=Programming=-` at 304 MB/s with verify on (18%, about 2 min left), and Copy "Music" to the
 same place waiting for its disk ("After: Copy 'Westworld'…"), as the queue per disk should. The title
 reads "18% · CopyMaster"; Task Manager shows C: at 100%.
+
+## 2026-11-27: phase 4 (right-click Paste): built
+
+A side session. Built in one go; only Matthew's pastes in Explorer are left (and the deploy, which restarts
+Explorer because it has phase 3's DLL loaded).
+
+**Built (src/CopyMasterShell):**
+- `PasteHandler` (`IShellExtInit` + `IContextMenu`, CLSID `{355681EC-9621-450F-8449-6B5769A1149B}`):
+  **CopyMaster Paste**, verb `CopyMaster.Paste`. Initialize takes the folder (a background: Initialize gets
+  no selection) or the selection (a right-click on a folder or drive: exactly one item, a file-system folder,
+  from the shell's IDList array, so nothing is parsed and nothing waits on a network). QueryContextMenu adds
+  the item only when `IsClipboardFormatAvailable(CF_HDROP)`: the list of formats, never the data.
+- `Clipboard.*`: the click reads `CF_HDROP` and `Preferred DropEffect` with the plain Win32 clipboard on a
+  thread of its own (`CreateThread`, holding a reference to the DLL, ending in `FreeLibraryAndExitThread`),
+  and waits at most 3 s. The UI thread meanwhile runs only sent messages (`MsgWaitForMultipleObjectsEx` with
+  `QS_SENDMESSAGE`, then `PeekMessage(PM_QS_SENDMESSAGE)`): the clipboard's owner may be OLE's window on that
+  same thread, and has to answer WM_RENDERFORMAT. OLE's own `OleGetClipboard` wasn't used there: a call into
+  another apartment comes as a posted message, which that wait wouldn't run. Cut = `DROPEFFECT_MOVE` without
+  `DROPEFFECT_COPY`. The sequence number is read before opening and after closing, and kept only if it held
+  still (up to three reads), so it names exactly what was read.
+- `JobLauncher` writes `clipseq=<n>` for cuts. `ContextMenu.*` (the item table, AddMenuItems, FindMenuItem,
+  MenuItemString) and `Folders.*` (FileSystemFolder, SelectedFolder, DropFiles) came out of
+  `DragDropHandler.cpp` for both handlers to share; `SystemMessage` moved to `Module`.
+- `Registration` now registers both classes: the paste handler under `Directory\Background`, `Directory` and
+  `Drive\shellex\ContextMenuHandlers\CopyMaster`, plus Approved. `Directory\Background` serves the Desktop's
+  background: Windows' own "New" and NVIDIA's desktop items are registered there on this laptop, and
+  `DesktopBackground\shellex\ContextMenuHandlers` holds only the slideshow item.
+
+**Engine:** `CutPaste.Completes(spec, result)`: a move with a clipboard number, no failures, and something moved
+or already there (so a cut pasted into its own folder stays on the clipboard). `CutPaste.EmptyClipboardIfUnchanged`
+opens the clipboard, compares the number while it's open, empties it; on its own thread, for at most 2 s
+(emptying sends WM_DESTROYCLIPBOARD to the old owner). `CopyJob` calls it at the end of `Run` and `RetryFailed`
+(seam: `EmptyClipboard`), so CopyMaster.exe and cmcopy both finish a cut; `JobResult.Clipboard` says what
+happened. The source isn't sent `CFSTR_PASTESUCCEEDED`: the files have moved already. The window's empty text
+mentions Paste.
+
+**No test touches the real clipboard.** It belongs to the window station, so `ShellHost isolated <command>`
+makes a window station (`CopyMasterTest.<pid>`) and a desktop, runs `ShellHost <command>` there, and waits for
+everything started inside (a job object; at first it waited only for its child, the window station went with
+it, and the fake engine the DLL had just started never ran). ShellHost refuses `--paste` elsewhere, and loads
+the handler before it touches any clipboard, so its guard test can't clobber Matthew's even if the guard broke.
+`--clip copy|cut` puts files there through OLE as Explorer does (its own data object, or with `--shell-data` the
+shell's); `text`, `empty`; `hung` has a window on another thread promise CF_HDROP and never read its messages.
+`--clip-before-invoke` / `--clip-after-invoke` change the clipboard around the click. With
+`CM_SHELLHOST_ENGINE=<cmcopy.exe>`, the fake engine waits for `<job>.go`, runs the real cmcopy on the job, and
+writes its exit code to `<job>.engine`; `--wait-engine` drives that and prints the clipboard afterwards.
+
+**Measured on the private window station:**
+- Producing delayed formats didn't move the sequence number: OLE's data object, or the shell's, read through
+  WM_RENDERFORMAT, left it as it was (5 before and after; 10 for the shell's). The read-until-still loop
+  settles on its first pass.
+- A hung owner: the menu still came in about 50 ms (the whole ShellHost run), and the click gave up at
+  3000 ms with 0x800705B4 (ERROR_TIMEOUT).
+- End to end: a cut through the DLL and the real cmcopy moved the files and left the clipboard empty (5 → 6);
+  with text copied after the click, the files moved and the text stayed (10, untouched).
+
+**Tests:** 37 new (198 pass, 11 opt-in skipped). `CutPasteTests` (10, the seam): a cut that moves everything
+empties once with its number; a copy, a move with no number, a failure, a cancel, a missing source and a cut
+into its own folder don't; a retry that finishes does; files already there count. `ShellExtensionTests.Paste.cs`
+(27 with theory cases): a cut on a background is a move with `clipseq` equal to the clipboard's number (unchanged
+by the read); a copy on a folder (the shell's data object) has none; every way of invoking; the Desktop's
+background gives the Desktop folder; a drive takes it; This PC, the Recycle Bin, Control Panel, a library and a
+.zip get none, as item or background; two selected folders get none; text or nothing on the clipboard gets
+none; the hung owner (item shown, click gives up at 3 s); the clipboard losing its files before the click
+(0x80040064, no job); no CopyMaster.exe; the guard; and three end to end through cmcopy (cut empties, a changed
+clipboard is left alone, a copy leaves it as it was). The tests project builds cmcopy (a build-only reference).
+
+**Checked:** `.\build.ps1` clean in Debug and Release; the 47 shell tests pass on Release too. `dumpbin
+/dependents`: KERNEL32, USER32, ADVAPI32, SHELL32, ole32 and api-ms-win-core-winrt-error, as before. The
+Release DLL is 211 KB (was 194). The phase 3 tests pass unchanged after the split into ContextMenu and Folders.
+
+**Found:** the Bash tool's heredoc ate backslashes again (`"\\n"` in a Python patch, `.\dev\reload` became
+`.\dev` + CR + `eload`): patches with backslashes go through a file written by the Write tool. The tool shell
+refuses `Remove-Item` with a wildcard or a list of paths ("system path ... is blocked"), even in the scratchpad.
+A `cd` inside a Bash call moved the session's working directory once more.
+
+**Not done:** deploying, which restarts Explorer (it has phase 3's DLL loaded, and the new class lives in the
+new DLL); then Matthew's pastes in Explorer.

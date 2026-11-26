@@ -76,8 +76,21 @@ Read PLAN.md (design and phases), TODO.md and WORKLOG.md first.
   instead where possible: `ShellHost menu|invoke --dll <dll> --target <folder|desktop|::{clsid}>
   [--verb CopyMaster.CopyHere] <sources>`, `ShellHost cocreate <clsid>`. Copied beside the DLL
   as CopyMaster.exe, ShellHost catches the job in `received\` instead of copying anything.
-- **The shell tests (`ShellExtensionTests`) use the built DLL and ShellHost**, and skip if
-  they're missing. `dotnet test` doesn't build C++: run `.\build.ps1` after changing the DLL.
+- **Never touch Matthew's clipboard.** The paste handler is tested with `ShellHost isolated invoke
+  --paste --dll <dll> --target <folder> [--background] --clip copy|cut|text|empty|hung
+  [--verb CopyMaster.Paste] <files>`: `isolated` runs it on a window station of its own (the clipboard
+  is per window station) and waits, through a job object, for everything started in there. ShellHost
+  refuses `--paste` anywhere else. With `CM_SHELLHOST_ENGINE=<cmcopy.exe>` and `--wait-engine`, the fake
+  engine runs the real cmcopy on the job (end to end, clipboard emptying included). The engine's own
+  tests use `CopyJob.EmptyClipboard` (a seam), never the real clipboard.
+- **The shell tests (`ShellExtensionTests`, `.Paste.cs`) use the built DLL and ShellHost**, and skip
+  if they're missing. `dotnet test` doesn't build C++: run `.\build.ps1` after changing the DLL. It
+  does build cmcopy (a build-only reference) for the end-to-end paste tests.
+- **Clipboard reads in the DLL go through `Clipboard.h`**: the menu asks only
+  `IsClipboardFormatAvailable`; the click reads on a worker thread for at most 3 s. A clipboard owner
+  that never answers WM_RENDERFORMAT would otherwise hang Explorer (`--clip hung` tests it).
+- **The tool shell refuses `Remove-Item` with a wildcard or several paths** ("system path ... is
+  blocked"), even in the scratchpad. Remove one `-LiteralPath` at a time.
 - **regsvr32 is a GUI program**: PowerShell doesn't wait for it or set `$LASTEXITCODE`. Use
   `Start-Process -Wait -PassThru` and its `ExitCode` (reload.ps1 does).
 - **PIDLs are `__unaligned` on x64**: `unique_ptr<ITEMIDLIST>` raises C4090 (an error here);

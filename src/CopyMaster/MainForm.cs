@@ -79,6 +79,7 @@ internal sealed class MainForm : Form
         _empty = new Label
         {
             Text = "No jobs.\n\nRight-drag files in Explorer and choose “CopyMaster Copy here” or “Move here”,\n" +
+                   "or copy or cut them, right-click a folder and choose “CopyMaster Paste”,\n" +
                    "or run CopyMaster copy|move --dest <folder> <source>...",
             ForeColor = Theme.Dim,
             TextAlign = ContentAlignment.MiddleCenter,
