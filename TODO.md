@@ -180,8 +180,7 @@
 - [ ] **Matthew: copy and cut some files in Explorer, then right-click a folder, a folder's background
       and the Desktop, and choose CopyMaster Paste** ("Show more options" on Windows 11, or
       Shift+right-click). After a cut, Explorer's own Paste should be greyed once CopyMaster has moved
-      the files. Needs a deploy first (`.\dev\reload.ps1`), which restarts Explorer since it has the
-      old DLL loaded.
+      the files. Deployed 2026-11-27 01:44 (Explorer restarted).
 
 ## Ideas surfaced in phase 4 (not decided)
 

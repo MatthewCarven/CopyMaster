@@ -439,5 +439,9 @@ Release DLL is 211 KB (was 194). The phase 3 tests pass unchanged after the spli
 refuses `Remove-Item` with a wildcard or a list of paths ("system path ... is blocked"), even in the scratchpad.
 A `cd` inside a Bash call moved the session's working directory once more.
 
-**Not done:** deploying, which restarts Explorer (it has phase 3's DLL loaded, and the new class lives in the
-new DLL); then Matthew's pastes in Explorer.
+**Deployed at 01:44** (2026-11-27), at Matthew's word: `reload.ps1` built Release, set the loaded DLL aside as
+`.old`, registered, and restarted Explorer (back as pid 6732). The deployed DLL, engine and window match the
+build byte for byte; HKLM has the three paste keys and the drag-drop ones; `ShellHost cocreate` creates both
+classes from the registry; on a private window station the deployed DLL offers CopyMaster Paste on the Desktop's
+background (the Desktop folder) for files, and nothing for text. The new Explorer loads the DLL on its first
+right-click. Left: Matthew's pastes in Explorer.
