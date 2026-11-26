@@ -210,18 +210,30 @@
 - [x] Tests: 29 new (227 pass, 11 opt-in skipped): the command as item and background, the desktop, a drive,
       the places that get none, the hung owner, the message boxes, end to end through cmcopy; the manifest
       against Clsids.h and makeappx's schema check; the icons in the DLL, the exes and the classic items.
-- [ ] **Register the package and deploy** (Matthew's yes needed: the package goes in for all users, and the
-      deploy restarts Explorer). Close CopyMaster first (pid 18920 runs from the deploy folder). Then
-      `.\dev\package.ps1`, then `.\dev\reload.ps1`.
-- [ ] Check where Explorer runs the command (explorer.exe or a dllhost surrogate), whether a CopyMaster.exe
-      started from it runs inside the package (and so would end if the package were removed mid-copy), and
-      whether its window comes to the front.
-- [ ] **Matthew: copy some files, then right-click a folder, a folder's background, a drive and the Desktop on
-      Windows 11, and see CopyMaster Paste (with its icon) in the compact menu**, not only under "Show more
-      options". Then a paste from it, and a cut. Also: does "Show more options" now show CopyMaster Paste
-      twice? If so, the classic one's keys come out (registry only, no restart).
+- [x] **Registered and deployed** (2026-11-27 03:18, at Matthew's yes): `package.ps1` installed the unsigned
+      package with its external location (no certificate needed); `reload.ps1` deployed and restarted Explorer.
+- [x] Where it runs: a **dllhost surrogate** inside the package, and the CopyMaster.exe it starts runs inside the
+      package too (so removing or replacing the package would end it). Its window comes to the front; it hands
+      its job to a CopyMaster.exe started from Explorer.
+- [x] Matthew's screenshots: the package's Paste shows in his menus (folder, background, drive) with its icon,
+      and the right-drag items have the icon too. "Show more options" showed **two** Pastes, so with the package in
+      the classic Paste's keys now come out (`CopyMasterSetup.psm1`); his next screenshot shows **one**, and a
+      paste from it worked (the window has the icon).
+- [ ] **Matthew: the real compact menu.** His Explorer shows the classic menu first because StartAllBack replaces
+      Windows 11's compact menu; switching that off needs a sign-out ("i have other things working for now").
+      When convenient: StartAllBack's classic context menu off, sign out and in, copy a file, right-click a
+      folder's background and see CopyMaster Paste at the top level; then switch it back. (Optional: the
+      mechanism is the one Terminal, VS Code and TreeSize use, and those show in his classic menu the same way.)
+- [ ] Matthew: a **cut** pasted with the package's Paste (a move, then Explorer's Paste greyed).
+- [ ] Decide: **start CopyMaster.exe outside the package?** From the package's Paste it runs inside it, so a package
+      update or removal ends a running copy (the scripts refuse while it runs). Explorer could start it instead
+      (IShellDispatch2::ShellExecute through the shell's windows), as it does for the right-drag items. A DLL
+      change, so an Explorer restart.
 
 ## Phase 5b: installer and uninstaller
 
 - [ ] Install and uninstall scripts (PowerShell, probably enough here): files, HKLM keys (regsvr32), the
-      package; uninstall leaves nothing behind (and the settings folder, asked or by a switch).
+      package (and the classic Paste's keys out while it's in); uninstall leaves nothing behind: the package
+      (and its `%LOCALAPPDATA%\Packages\CopyMaster_gzvqk2jf034f6` folder), the HKLM keys, the files (a DLL loaded in
+      Explorer can only be renamed, so a delete at reboot or an Explorer restart), and the settings folder
+      (asked, or by a switch). No certificate to remove: the package is unsigned.

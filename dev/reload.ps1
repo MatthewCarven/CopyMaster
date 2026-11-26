@@ -11,6 +11,9 @@ Deploys CopyMaster with a fresh build of its Explorer extension and registers it
 needed only once Explorer has loaded the DLL (after the first right-drag that shows the menu): a
 loaded DLL keeps running until Explorer exits. A first deploy needs no restart.
 
+With CopyMaster's package registered (dev\package.ps1), the classic Paste's keys come out again after
+regsvr32: the package's Paste shows in the classic menu too.
+
 The deployed layout, in %LOCALAPPDATA%\Programs\CopyMaster: CopyMaster.exe with its files, and
 CopyMasterShell.dll beside it (the DLL starts the CopyMaster.exe in its own folder). A loaded DLL
 can't be overwritten, but it can be renamed: the old one is moved aside as *.old and deleted on a
@@ -116,6 +119,9 @@ Write-Host "Deployed $Configuration to $deploy."
 
 Invoke-Regsvr32 '/s'
 Write-Host "Registered $dll."
+# With CopyMaster's package in, its Paste serves the classic menu too: no second one (CopyMasterSetup.psm1).
+Import-Module (Join-Path $PSScriptRoot 'CopyMasterSetup.psm1') -Force
+if (Get-CopyMasterPackage) { Remove-ClassicPaste }
 
 if ($Restart -or $loaded) {
     Restart-Explorer

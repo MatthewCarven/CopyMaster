@@ -19,6 +19,10 @@ replaces any CopyMaster package already there. Removing a package ends any proce
 refuses while CopyMaster.exe runs from the deploy folder (it may be copying).
 
 Explorer usually picks up a new package by itself; if Paste doesn't show, restart Explorer.
+
+The package's Paste shows in the classic menu too ("Show more options", or StartAllBack's classic menu), so
+registering takes the classic handler's Paste keys out (two would show), and -Unregister puts them back
+(CopyMasterSetup.psm1). Registry only: no Explorer restart.
 #>
 param(
     [string]$Location = (Join-Path $env:LOCALAPPDATA 'Programs\CopyMaster'),
@@ -31,14 +35,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $source = Join-Path $root 'package'
 $msix = Join-Path $source 'bin\CopyMaster.msix'
-$name = 'CopyMaster'
-
-# The Appx cmdlets live in Windows PowerShell; PowerShell 7 reaches them through its compatibility layer.
-Import-Module Appx -UseWindowsPowerShell -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
-
-function Get-CopyMasterPackage {
-    @(Get-AppxPackage -Name $name -AllUsers -ErrorAction SilentlyContinue)
-}
+Import-Module (Join-Path $PSScriptRoot 'CopyMasterSetup.psm1') -Force
 
 function Find-SdkTool([string]$tool) {
     $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
@@ -78,8 +75,8 @@ if ($Status) {
 
 if ($Unregister) {
     Assert-NotRunning
-    if (-not (Get-CopyMasterPackage)) { Write-Host 'CopyMaster''s package was not registered.'; return }
-    Remove-CopyMasterPackage
+    if (Get-CopyMasterPackage) { Remove-CopyMasterPackage } else { Write-Host 'CopyMaster''s package was not registered.' }
+    Restore-ClassicPaste (Join-Path $Location 'CopyMasterShell.dll')
     return
 }
 
@@ -104,3 +101,4 @@ Add-AppxPackage -Path $msix -ExternalLocation $Location -AllowUnsigned
 $package = Get-CopyMasterPackage | Select-Object -First 1
 if (-not $package) { throw 'Add-AppxPackage said nothing went wrong, but the package is not registered.' }
 Write-Host "Registered $($package.PackageFullName), external location $Location."
+Remove-ClassicPaste

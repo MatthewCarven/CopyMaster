@@ -535,3 +535,42 @@ window); no CopyMaster.exe (message names the path, no job file); title, icon lo
 the classic items' 32-bit bitmaps; end to end through cmcopy (moved, clipboard emptied); the manifest against
 Clsids.h (verbs, class, Path, Executable, AppListEntry, the OID, the logos) and makeappx's schema check; the
 icon in the DLL and both exes. Debug and Release build clean; the 76 shell tests pass on Release too.
+
+**Registered and deployed at 03:18** (2026-11-27), at Matthew's yes (he closed CopyMaster first): `package.ps1`
+installed `CopyMaster_1.0.0.0_x64__gzvqk2jf034f6` (signature None) with `-AllowUnsigned -ExternalLocation`, so
+**an unsigned sparse package with an external location works on 22631, no certificate**; `reload.ps1` deployed
+Release (files match the build) and restarted Explorer. `ShellHost cocreate {373E9CED-…} local` gave S_OK, "title
+CopyMaster Paste", "state hidden" (no selection, no site), from `DllHost.exe /Processid:{373E9CED-…}`, whose package
+is CopyMaster's; `inproc` from an unpackaged process gave 0x80040154. A watcher script (scratchpad) logged each
+surrogate, each new CopyMaster.exe with its parent and package, and when Explorer had the DLL.
+
+**What Matthew's menus showed:**
+- His first menu everywhere is the **classic** one: **StartAllBack** is loaded in Explorer and replaces Windows 11's
+  compact menu. Turning that off needs a sign-out, which he can't do now. So the compact menu itself is still
+  unseen here; the packaged command shows in his classic menu instead, as Terminal's, VS Code's and TreeSize's do.
+- Screenshots: on a folder and on C:, **CopyMaster Paste twice**: the package's (with its icon, beside TreeSize)
+  and the classic handler's (lower, also with its icon now). The right-drag menu's items have the icon.
+- **The package's command runs in the surrogate**: every menu opening started a new `DllHost /Processid:{CLSID}`
+  (parent svchost, package CopyMaster). With the classic Paste gone, both of his pastes started CopyMaster.exe
+  **from dllhost, inside the package**. Those launches handed their jobs over to the CopyMaster.exe he'd started
+  earlier from the classic item (parent explorer.exe, no package) and exited, so hand-over across the package
+  boundary works. The window came to the front ("Pasted, window on top"), and the job file, written from the
+  surrogate, was found where it should be (write virtualization off). The earlier paste he took for the top item
+  was the classic one (parent explorer.exe).
+- So the answer to "in process or not": **out of process, in a COM surrogate in the package's context.** For the
+  clipboard nothing changes. For CopyMaster.exe: it runs inside the package, so removing or replacing the package
+  would end it mid-copy; `package.ps1` already refuses while it runs. Starting it through Explorer instead is in
+  TODO as a decision.
+
+**The double Paste, fixed without a restart:** `dev\CopyMasterSetup.psm1` (`Get-CopyMasterPackage`,
+`Remove-ClassicPaste`, `Restore-ClassicPaste`): while the package is registered, the classic handler's three
+`ContextMenuHandlers\CopyMaster` keys come out (and SHCNE_ASSOCCHANGED), and the package's Paste serves the classic
+menu too; `package.ps1 -Unregister` runs regsvr32 again to put them back; `reload.ps1` removes them again after its
+regsvr32 when the package is in. The handler's CLSID and the right-drag keys stay. **Matthew's next screenshot: one
+CopyMaster Paste**, near the top with its icon, and a paste from it worked (into the file's own folder, so "Nothing
+copied, 1 note", as designed). The window's title bar has the new icon. No errors.log, no CopyMaster crash events.
+
+**Found:** opening `HKLM\Software\Classes` itself for writing from the tool shell was refused ("Requested registry
+access is not allowed") though regsvr32 writes under it; opening each key's parent (`...\ContextMenuHandlers`) for
+writing works. Every package gets `%LOCALAPPDATA%\Packages\<family>` at registration (AC, LocalCache, Settings...):
+the uninstaller has to see it gone.

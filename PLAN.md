@@ -100,16 +100,23 @@ also runs from a command line, so most of the testing never involves Explorer.
     disk with files on the clipboard (the list of formats only, so never `E_PENDING`); `Invoke` is the
     classic click (worker thread, 3 s). There's no "no UI" flag, so failures always show a message box,
     owned by the site's window.
-  - **In process or not?** Microsoft's docs don't say; PowerToys' say Windows 11 handlers run in a
-    dllhost surrogate ("attach to DllHost.exe"), while Notepad++'s crash reports show its packaged DLL in
-    explorer.exe. Nothing here depends on it: in a surrogate the clipboard is the same (one session and
-    window station), the 3 s limit still holds, and Explorer's window still owns the message box. Two
-    things would differ in a surrogate, to check once registered: CopyMaster.exe might start inside the
-    package (and so be ended if the package is removed or replaced mid-copy), and might not come to the
-    front.
-  - The classic Paste may show twice under "Show more options" with the package in (PowerToys: both
-    kinds registered give duplicates there). If so, the classic Paste keys come out when the package
-    goes in: registry only, no Explorer restart.
+  - **It runs in a surrogate** (seen 2026-11-27): each menu starts `DllHost.exe
+    /Processid:{373E9CED-…}` (launched by COM's svchost) inside the package, with our DLL loaded; an
+    unpackaged process can't create the class in-process (0x80040154). The clipboard is the same there
+    (one session and window station), so nothing about reading it changes, and the 3 s limit still holds.
+    **CopyMaster.exe started from it runs inside the package** (parent dllhost.exe, package identity), so
+    removing or replacing the package would end it, mid-copy or not: the scripts refuse while it runs.
+    Its window still came to the front, its job file was found (write virtualization is off), and a launch
+    from the package handed its job to a CopyMaster.exe started from Explorer (outside the package). A way
+    out, not taken yet: have Explorer start it (IShellDispatch2::ShellExecute through the shell's windows).
+  - **The package's Paste shows in the classic menu too**, beside the other packaged apps' items, so with
+    both registered "Show more options" had two (as PowerToys' docs warn). So while the package is in, the
+    classic handler's three Paste keys come out (`dev\CopyMasterSetup.psm1`, used by `package.ps1` and
+    `reload.ps1`; registry only, no Explorer restart) and the package's Paste serves both menus. Without the
+    package (Windows 10, or unregistered), regsvr32 puts them back.
+  - **Matthew's laptop has no compact menu to show**: StartAllBack, loaded in Explorer, swaps Windows 11's
+    compact menu for the classic one (turning that off needs a sign-out). So his menus are all classic,
+    where the package's Paste shows once, with its icon.
   - **The right-drag menu** is classic on Windows 11 too, so the drag-drop handler needs nothing more.
     Nothing else belongs in the compact menu for now: Copy here / Move here exist only for a drag.
 - **Icons**: `assets\CopyMaster.ico` (from `dev\make-icons.cs`, drawn from shapes at each size, 16 to
@@ -269,7 +276,7 @@ Each is about one session. Phases 1 and 2 never touch Explorer.
 | 2 | Engine UI: queue window, progress, live speed slider, pause, conflict dialog, error list, summary, single instance + named pipe, queue per drive, settings, dark mode | Matthew has run real copies and moves through the window. Built 2026-11-26 (122 tests, an end-to-end UI Automation check); his run is still to come |
 | 3 | Shell DLL, right-drag: handler, job file, launching the engine, registration, `dev\reload.ps1`, ShellHost | Done 2026-11-26: Matthew right-dragged files in Explorer and got CopyMaster (no Explorer restart needed). A drop into the items' own folder now does nothing (20 ShellHost tests) |
 | 4 | Right-click Paste: handler on folder, background and drive, clipboard read, cut → move, clipboard emptied after a cut | Done 2026-11-27: Matthew pasted a copy and a cut in Explorer, on a folder, a folder's background and the Desktop (37 new tests, ShellHost on a private window station, end to end through cmcopy) |
-| 5a | Windows 11 compact menu (`IExplorerCommand` + an unsigned sparse package), icons | Paste appears in the compact menu. Built 2026-11-27 (29 new tests); the package isn't registered yet (Matthew's go-ahead) |
+| 5a | Windows 11 compact menu (`IExplorerCommand` + an unsigned sparse package), icons | Paste appears in the compact menu. Built and deployed 2026-11-27 (29 new tests): Matthew pasted with the package's Paste in his menus (classic, through StartAllBack), once, with its icon. The compact menu itself waits for a sign-out with StartAllBack's classic menu off |
 | 5b | Installer and uninstaller | Uninstall leaves nothing behind |
 
 Testing moves between volumes needs a second volume: the laptop has only C:. A small

@@ -90,6 +90,16 @@ Read PLAN.md (design and phases), TODO.md and WORKLOG.md first.
   Registering or removing it is a system change: ask Matthew first. Removing a package ends its processes, so
   the script refuses while CopyMaster.exe runs from the deploy folder. Developer Mode happens to be on here
   (Terminal Dev); nothing relies on it. The CLSID is in Clsids.h *and* the manifest (a test checks).
+  Registered since 2026-11-27 as `CopyMaster_1.0.0.0_x64__gzvqk2jf034f6`.
+- **The package's Paste runs in a COM surrogate** (`DllHost.exe /Processid:{373E9CED-…}`, inside the package), not
+  in Explorer, and **the CopyMaster.exe it starts runs inside the package** (parent dllhost). It shows in the
+  classic menu too, so while the package is in, the classic handler's Paste keys are taken out
+  (`dev\CopyMasterSetup.psm1`, used by `package.ps1` and `reload.ps1`). `ShellHost cocreate <clsid> local`
+  activates it out of process without Explorer.
+- **Matthew's Explorer has StartAllBack**, which replaces Windows 11's compact menu with the classic one. His
+  menus are all classic; the compact menu can only be seen with StartAllBack's classic menu off (a sign-out).
+- **Writing HKLM from the tool shell**: opening `HKLM\Software\Classes` itself for writing is refused; open the
+  parent of the key you change (`...\shellex\ContextMenuHandlers`) instead. regsvr32 is unaffected.
 - **ShellHost drives the command too**: `ShellHost isolated menu|invoke --command --dll <dll> --target <folder>
   [--background [--empty-items]] [--site <folder>] [--site-shellfolder] --clip ...`. The compact menu has no
   "no UI" flag, so every invoke runs a watcher that reads each message box (a `dialog` line) and closes it with
