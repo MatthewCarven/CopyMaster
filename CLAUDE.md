@@ -90,4 +90,8 @@ Read PLAN.md (design and phases), TODO.md and WORKLOG.md first.
   The desktop's share is mapped as Z:.
 - **Matthew's Windows is in dark mode**; the UI should follow it.
 - **Pushing is fine without asking** (root CLAUDE.md, 2026-11-03). Never force-push or rewrite
-  pushed history.
+  pushed history. The repo is `master` on `origin`, https://github.com/MatthewCarven/CopyMaster
+  (since 2026-11-26). Commit messages end with a `Co-Authored-By: Claude` trailer; README.md
+  credits Matthew and Claude (his ask).
+- **Commit messages from the PowerShell tool**: `git commit -F -` with a here-string as an argument
+  doesn't feed stdin (git takes the text as a pathspec). Use `-m @'...'@` or `-F <file>`.

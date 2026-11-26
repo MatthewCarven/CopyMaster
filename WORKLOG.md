@@ -345,6 +345,9 @@ The two leftovers stay on the Desktop for Matthew. Not committed: the folder sti
 
 ## 2026-11-26: git
 
-Matthew ran `git init` (branch `master`, no remote). The first commit holds everything through phase 3:
+Matthew ran `git init` (branch `master`). The first commit (`2c47e86`) holds everything through phase 3:
 76 files, source and docs only (the `.gitignore` from phase 0 keeps out `bin/`, `obj/` and `.vs/`).
-From here on, work is committed as it's done (root CLAUDE.md). Pushing waits for a remote.
+He then gave the remote: `origin` is https://github.com/MatthewCarven/CopyMaster, which was empty;
+`master` pushed and tracking `origin/master`. From here on, work is committed and pushed as it's done
+(root CLAUDE.md). At his asking ("put your name on it too"), a README crediting Matthew and Claude; the
+commits already carry a `Co-Authored-By: Claude` trailer.
