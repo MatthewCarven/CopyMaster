@@ -163,7 +163,7 @@
 - [ ] 7-Zip's right-drag items are registered under Directory and Drive only, so they may not show on
       the Desktop. Nothing to do with CopyMaster; just a thing seen in the registry.
 
-## Phase 4: right-click Paste, built 2026-11-27
+## Phase 4: right-click Paste, done 2026-11-27
 
 - [x] Paste handler (`PasteHandler`, its own CLSID) on `Directory\Background` (the Desktop's background
       too), `Directory`, `Drive`; hidden when the clipboard has no files (only the list of formats is
@@ -177,14 +177,15 @@
       (where to copy to); `JobLauncher` takes the clipboard number.
 - [x] `ShellHost isolated` (a window station of its own: no test touches the real clipboard), `--paste`,
       `--clip copy|cut|text|empty|hung`, and an end-to-end mode through the real cmcopy.
-- [ ] **Matthew: copy and cut some files in Explorer, then right-click a folder, a folder's background
+- [x] **Matthew: copy and cut some files in Explorer, then right-click a folder, a folder's background
       and the Desktop, and choose CopyMaster Paste** ("Show more options" on Windows 11, or
       Shift+right-click). After a cut, Explorer's own Paste should be greyed once CopyMaster has moved
       the files. Deployed 2026-11-27 01:44 (Explorer restarted).
       **First paste worked (01:46):** Matthew copied the Desktop's Music folder, right-clicked
       `-=Programming=-`'s background (CopyMaster Paste sat between "Open Git Bash here" and "Give access
       to"), and got a CopyMaster job: 24.5 GB, 3,093 items, 863 MB/s. **Still to try: a cut, a
-      right-click on a folder itself, and the Desktop's background.**
+      right-click on a folder itself, and the Desktop's background.** Then those too: **"Done, all
+      worked"** (01:52).
 
 ## Ideas surfaced in phase 4 (not decided)
 

@@ -453,3 +453,8 @@ Paste** between "Open Git Bash here" and "Give access to". It started the deploy
 863 MB/s. Explorer (pid 6732) has the new DLL loaded; the jobs folder is empty, there's no `errors.log`, and the
 Application log has no crash. C: had 44.2 GB free mid-copy. Still to try: a cut (a move, then Explorer's Paste
 greyed), a right-click on a folder itself, and the Desktop's background.
+
+**Then the rest (01:52): "Done, all worked."** Matthew tried a cut, a right-click on a folder itself and
+the Desktop's background. Afterwards: no `errors.log`, the jobs folder empty, no crash events in the
+Application log. **Phase 4 is done.** Next is phase 5 (Windows 11's compact menu, an installer, icons), and
+the open ideas in TODO.md, such as whether a copy pasted into its own folder should make "X - Copy".

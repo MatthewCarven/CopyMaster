@@ -230,7 +230,7 @@ Each is about one session. Phases 1 and 2 never touch Explorer.
 | 1b | The same for real: across volumes (a VHDX), to the desktop share (chunk sizes, the SMB verify question), a genuinely full disk | Done 2026-11-26: 10 opt-in integration tests pass on two VHDXs and the share |
 | 2 | Engine UI: queue window, progress, live speed slider, pause, conflict dialog, error list, summary, single instance + named pipe, queue per drive, settings, dark mode | Matthew has run real copies and moves through the window. Built 2026-11-26 (122 tests, an end-to-end UI Automation check); his run is still to come |
 | 3 | Shell DLL, right-drag: handler, job file, launching the engine, registration, `dev\reload.ps1`, ShellHost | Done 2026-11-26: Matthew right-dragged files in Explorer and got CopyMaster (no Explorer restart needed). A drop into the items' own folder now does nothing (20 ShellHost tests) |
-| 4 | Right-click Paste: handler on folder, background and drive, clipboard read, cut → move, clipboard emptied after a cut | Matthew has pasted a copy and a cut in Explorer. Built 2026-11-27 (ShellHost on a private window station, end to end through cmcopy); his run is still to come |
+| 4 | Right-click Paste: handler on folder, background and drive, clipboard read, cut → move, clipboard emptied after a cut | Done 2026-11-27: Matthew pasted a copy and a cut in Explorer, on a folder, a folder's background and the Desktop (37 new tests, ShellHost on a private window station, end to end through cmcopy) |
 | 5 | Windows 11 compact menu (`IExplorerCommand` + a self-signed sparse package), installer and uninstaller, icons | Paste appears in the compact menu; uninstall leaves nothing behind |
 
 Testing moves between volumes needs a second volume: the laptop has only C:. A small
@@ -242,7 +242,7 @@ VHDX made and attached with `diskpart` works on Windows Home (no Hyper-V needed)
   work here too, since UAC is off).
 - ~~The Desktop as a paste target~~: `Directory\Background` serves the Desktop's background (Windows'
   own "New" and NVIDIA's desktop items are registered there); ShellHost shows the root gives the
-  Desktop folder. Matthew's hand test settles it.
+  Desktop folder, and Matthew's paste on the Desktop worked (2026-11-27).
 - **The `=` in `-=Programming=-` breaks link.exe's `/LIBPATH`** (found building Terminal,
   2026-10-16). The DLL links only Windows SDK libraries, which live outside this folder.
   Don't add a static-library project here without allowing for that.
