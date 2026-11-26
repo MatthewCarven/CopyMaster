@@ -1,0 +1,21 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/CopyMaster.Engine/CopyMaster.Engine.csproj" />
+    <Project Path="src/CopyMaster/CopyMaster.csproj" />
+    <Project Path="src/CopyMaster.Cli/CopyMaster.Cli.csproj" />
+    <Project Path="src/CopyMasterShell/CopyMasterShell.vcxproj" Id="5b0e7a2c-3f4d-4c8e-9a1b-6d2f8e4c7a90">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CopyMaster.Engine.Tests/CopyMaster.Engine.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/ShellHost/ShellHost.vcxproj" Id="3a9e1aa2-e238-44ee-ac5e-01ea7da940cb">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+</Solution>
