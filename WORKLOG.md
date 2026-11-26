@@ -351,3 +351,15 @@ He then gave the remote: `origin` is https://github.com/MatthewCarven/CopyMaster
 `master` pushed and tracking `origin/master`. From here on, work is committed and pushed as it's done
 (root CLAUDE.md). At his asking ("put your name on it too"), a README crediting Matthew and Claude; the
 commits already carry a `Co-Authored-By: Claude` trailer.
+
+## 2026-11-27: Matthew's screenshot
+
+The open phase 3 question is answered: right-dragging onto a folder on the Desktop, the menu reads 7-Zip,
+**CopyMaster Copy here**, **CopyMaster Move here**, then Windows' Copy here, Move here (the default),
+Create shortcuts here. So the items show once, though `Directory`, `Drive` and `Folder` all name the CLSID:
+Explorer loads a handler once however many keys list it. Nothing to change.
+
+The same screenshot shows a real queue: Copy "Westworld" (18.9 GB, 134 items) into
+`Desktop\-=Programming=-` at 304 MB/s with verify on (18%, about 2 min left), and Copy "Music" to the
+same place waiting for its disk ("After: Copy 'Westworld'…"), as the queue per disk should. The title
+reads "18% · CopyMaster"; Task Manager shows C: at 100%.

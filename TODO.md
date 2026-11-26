@@ -3,9 +3,9 @@
 ## For Matthew
 
 - [x] **Right-drag on the Desktop once more** (the same-folder fix, deployed 2026-11-26 23:18):
-      Matthew confirmed the CopyMaster items are gone for a Desktop-onto-Desktop drop. (Still
-      unnoted: whether the items show once or twice on a real drop. To take the extension out:
-      `.\dev\reload.ps1 -Unregister`.)
+      Matthew confirmed the CopyMaster items are gone for a Desktop-onto-Desktop drop. His screenshot
+      (2026-11-27) of a drop onto a folder on the Desktop shows them **once**, between 7-Zip and
+      Windows' own Copy here. To take the extension out: `.\dev\reload.ps1 -Unregister`.
 - [ ] Two leftovers on the Desktop from the first right-drag test, yours to delete or keep:
       `New folder (5) (2)` (a cancelled copy: 233 of 281 files) and
       `Gotye Somebody I used to know - ID-Error (2).mp3` (a complete duplicate).
@@ -144,7 +144,7 @@
 - [x] Tests: 15 in `ShellExtensionTests` through ShellHost (round trip through `JobFile.Read`, `=` and
       spaces, long paths, every way of invoking, the places that get no items). 155 pass.
 - [x] Matthew: right-drag files in Explorer (copy and move, to a folder and to the Desktop): it worked,
-      and a first registration needed no Explorer restart. Whether the items showed once wasn't noted.
+      and a first registration needed no Explorer restart. The items show once (three keys, one CLSID).
 - [x] Matthew's note: a file and a folder copied from the Desktop onto the Desktop became `X (2)` beside
       the original, and the card ("Copy X to C:\Users\Admin\Desktop") read like a copy over itself. His
       call: **a drop into the items' own folder does nothing.** The DLL offers no items when every
