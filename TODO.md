@@ -21,8 +21,8 @@
 - [ ] Decide: **verify is on by default** for new jobs (it reads every copy back, so jobs take
       about twice as long). Settings turns it off.
 - [x] **`git init` this folder**: Matthew ran it 2026-11-26; the first commit holds phases 0–3.
-      Pushed to https://github.com/MatthewCarven/CopyMaster (`origin`, branch `master`). There's no
-      licence file: that's yours to pick, if you want one.
+      Pushed to https://github.com/MatthewCarven/CopyMaster (`origin`, branch `master`). MIT licence
+      (Matthew: "i dont care if other people use it freely").
 - [ ] **Delete the empty folder `Z:\_CopyMasterTest`** (phase 1b's scratch folder on the
       desktop share). Claude's tool shell refuses to delete a folder at the top of a drive.
 

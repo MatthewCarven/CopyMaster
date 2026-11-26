@@ -56,3 +56,8 @@ From a terminal: `CopyMaster.exe copy|move --dest <folder> <source>...`, or
 ## Authors
 
 Matthew Carven, and Claude (Anthropic's AI model), who wrote the code with him through Claude Code.
+
+## License
+
+MIT: use it, change it and share it freely, including in other projects, as long as the copyright
+notice stays with it. See [LICENSE](LICENSE).
