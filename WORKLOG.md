@@ -574,3 +574,80 @@ copied, 1 note", as designed). The window's title bar has the new icon. No error
 access is not allowed") though regsvr32 writes under it; opening each key's parent (`...\ContextMenuHandlers`) for
 writing works. Every package gets `%LOCALAPPDATA%\Packages\<family>` at registration (AC, LocalCache, Settings...):
 the uninstaller has to see it gone.
+
+## 2026-11-27: phase 5b (installer and uninstaller): built
+
+A side session. PowerShell scripts are enough for this laptop (a real installer only pays if CopyMaster goes to
+other people: PLAN.md). Built and tested in files-only and dry-run modes; the real install and uninstall wait for
+Matthew to run them by hand (TODO, top).
+
+**What CopyMaster leaves, surveyed first** (read-only, the real install as 5a left it): the deploy folder
+(`%LOCALAPPDATA%\Programs\CopyMaster`, 9 files plus a `CopyMasterShell.dll.20261127-031805.old`), the settings folder
+(`settings.json`, an empty `jobs\`), the package (InstallLocation `C:\Program Files\WindowsApps\CopyMaster_1.0.0.0_x64__
+gzvqk2jf034f6`: manifest and logos) and `%LOCALAPPDATA%\Packages\CopyMaster_gzvqk2jf034f6`; in HKLM the two CLSIDs, the
+three DragDropHandlers keys and two Approved values (the classic Paste's keys were already out, the package being
+in); in HKCU **Explorer's cache**, `Shell Extensions\Cached`, one value per CLSID ("{CLSID} {IID} 0xFFFF", all three
+of ours, the package's included), and the taskbar's usage counts (`FeatureUsage\AppSwitched`) for two CopyMaster.exe
+paths. `reg query /f CopyMaster /s` over HKCU and HKLM\SOFTWARE also found **Windows' bookkeeping for the package**:
+in HKCU AppModel\Repository (whose `PackageRootFolder` is the external location: Get-AppxPackage doesn't show it),
+SystemAppData, PolicyCache, AppContainer\Mappings and Storage, PackagedCom, AppHost\IndexedDB,
+BackgroundAccessApplications, PushNotifications\Backup, HostActivityManager; in HKLM PackageRepository, PackagedCom
+(the `{373E9CED-…}` class, `DllPath CopyMasterShell.dll`), StateRepository's cache (`PackageExternalLocation` too),
+CapAuthz, StagingInfo, Appx\PackageState. Remove-AppxPackage should take all of that; the check lists any it doesn't.
+No prefetch files, nothing pending a restart.
+
+**Decided: `%ProgramFiles%\CopyMaster`** instead of `%LOCALAPPDATA%\Programs\CopyMaster`: the registration is
+machine-wide (HKLM, a package for all users), so the files should be too, and with UAC on an HKLM extension loads
+into elevated programs' file dialogs, so a DLL a user process could replace would be a step up to admin. The tool
+shell can write there (tried with an empty folder, then removed it). The install refuses while CopyMaster is
+registered from another folder, so the move is an uninstall then an install, which is Matthew's hand test anyway.
+
+**Built (`setup\`):**
+- `CopyMasterSetup.psm1` (moved from `dev\` and grown): the places (CLSIDs, keys, folders, the package family name);
+  the checks (x64, elevated, CopyMaster.exe running from a folder, which processes have the DLL loaded: `tasklist /m`
+  then each candidate's module paths, .NET 10 Desktop Runtime); the build's files (refusing anything not named
+  CopyMaster*, skipping a Debug `runtimeconfig.dev.json`); copying in (a loaded DLL renamed aside); deleting
+  (CopyMaster* files only; a locked one renamed `*.<stamp>.old` and given to `MoveFileEx(DELAY_UNTIL_REBOOT)`, its
+  folder too); regsvr32, the registration's entries in HKLM and HKCU and deleting leftovers by their parent key;
+  Explorer's cache; the classic Paste in and out; Explorer's restart (from reload.ps1); the package (build, register,
+  unregister, its external location); `Get-CopyMasterTrace`, which sorts every trace by owner (CopyMaster's own,
+  waiting for a restart, Windows' records), and `-Deep`, reg.exe's search with known traces and (while the package is
+  in) its bookkeeping filtered out. Windows PowerShell 5.1 and 7 both.
+- `install.ps1`, `uninstall.ps1`, `check.ps1` (PLAN.md, "Installing and uninstalling"). Both changing scripts take
+  `-WhatIf` and `-FilesOnly -Path`; uninstall asks its two questions (settings; restarting Explorer, only if Explorer
+  has the DLL) before changing anything, or takes switches, and a non-interactive shell gets told which switch.
+- `dev\reload.ps1` deploys over the install, wherever the menus are registered from (so before Matthew's move it
+  still deploys to the old folder), and `dev\package.ps1` takes its location the same way; both now call the module.
+
+**Found:**
+- **The msix held the previous build's msix**: `makeappx pack /d package` packs the whole folder, `bin\CopyMaster.msix`
+  included, so each build carried the last (the registered one has a 7.7 KB `bin/CopyMaster.msix` inside it). Now
+  built from a mapping file naming the manifest and the logos; a test opens the msix and checks.
+- **`-WhatIf` broke PowerShell 7's Appx import**: the compatibility layer builds its proxy module in the global session
+  state, which sees the script's `$WhatIfPreference`, so its own copy into %TEMP% became a "what if" and the import
+  failed. Setting the preference off inside the module function didn't help (another session state); the scripts
+  load the Appx cmdlets first with it off for a moment. `Import-Module` itself has no `-WhatIf`.
+- Windows PowerShell 5.1 calls `Build` an unapproved verb (and warns on import): `New-CopyMasterPackage`.
+- `reg query` writes in the console's code page; pwsh's `Out-File` then writes UTF-8 (first read back as UTF-16 by
+  mistake: gibberish).
+- The package family name's hash: SHA-256 over the UTF-16 Publisher, the first 8 bytes in Crockford base 32 with a 0
+  bit added: `gzvqk2jf034f6`, as Windows has it. A test works it out from the manifest.
+
+**Tried on the real install, changing nothing:** `check.ps1` (4 s) lists exactly what the survey found; Explorer
+didn't have the DLL loaded at the time (nor any dllhost). `install.ps1 -WhatIf` refuses the default folder ("installed
+in ...\Programs\CopyMaster. Uninstall it first, or update it there"); with `-Path` that folder it would copy,
+regsvr32, keep the package ("registered already, from" there) and take the classic Paste out. `uninstall.ps1 -WhatIf`,
+in both PowerShells: would ask about the settings, remove the package, unregister "7 registry entries and 3 of
+Explorer's cache values", and delete the CopyMaster* files of the old folder. Afterwards the DLL and its HKLM path were
+untouched.
+
+**Tests:** 12 in `SetupScriptTests` (239 pass, 11 opt-in skipped; Release too), in their own collection, ~28 s since
+each starts PowerShell: the module's CLSIDs and keys against Clsids.h and Registration.cpp; the family name from the
+manifest's Publisher; every file of CopyMaster.exe's build named CopyMaster*; the package holds only the manifest and
+logos; a files-only install lays out exactly the build and the uninstall leaves nothing (5.1 and 7, a folder with `=`
+and spaces, a file beside it kept); a folder holding someone else's files keeps them and stays; a DLL loaded in the
+test process is renamed aside by an update and left for the restart by the uninstall (`CM_TEST_NO_RESTART_DELETE=1`:
+each real entry would sit in PendingFileRenameOperations until a restart, which some installers read as "restart
+pending"); both scripts refuse while a CopyMaster.exe (cmd.exe copied in, running ping) runs from the folder, and
+leave it running; `-WhatIf` changes nothing; `-FilesOnly` needs `-Path`; the check lists a folder it's shown and not
+once it's gone. Nothing left in %TEMP%, no pending deletes, no stray processes afterwards.

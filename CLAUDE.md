@@ -21,7 +21,8 @@ Read PLAN.md (design and phases), TODO.md and WORKLOG.md first.
 - **/W4 with warnings as errors**, except C4324, which fires inside the SDK's `wrl/module.h`.
 - **Write `CopyMaster.slnx` by hand.** `dotnet sln add --solution-folder` with two projects at
   once put one under the wrong folder and dropped the other.
-- **Tests**: `dotnet test tests/CopyMaster.Engine.Tests` (~4 s). They make scratch folders
+- **Tests**: `dotnet test tests/CopyMaster.Engine.Tests` (~45 s, ~28 of them the setup tests, which start
+  PowerShell 5.1 and 7 a dozen times; `--filter "FullyQualifiedName!~SetupScriptTests"` skips them). They make scratch folders
   under `%TEMP%\CopyMasterTests`. Timing tests (speed limit, pause, cancel) are in the
   "Timing" collection, which doesn't run in parallel. Test seams on `CopyJob` (internal):
   `ForceCrossVolume`, `BeforeCopy` (throw a disk-full IOException), `BeforeVerify` (corrupt
@@ -66,10 +67,19 @@ Read PLAN.md (design and phases), TODO.md and WORKLOG.md first.
   elevated too, but its token isn't split (elevation type "default"), so COM honours HKCU
   class registrations here after all (checked in phase 3, WORKLOG). The extension registers
   in HKLM anyway, which works either way.
-- **The deployed layout is `%LOCALAPPDATA%\Programs\CopyMaster`**: the exe's build output plus
-  CopyMasterShell.dll, which starts the CopyMaster.exe beside it. Registration points there,
-  never at a bin folder (Explorer would lock it). `.\dev\reload.ps1` builds Release, deploys,
-  registers (`-NoBuild`, `-Restart`, `-Unregister`, `-Configuration Debug`).
+- **Installing (phase 5b): `.\setup\install.ps1`**, `uninstall.ps1`, `check.ps1`, all on `setup\CopyMasterSetup.psm1`
+  (which knows every place CopyMaster touches; `dev\reload.ps1` and `dev\package.ps1` use it too). The install folder
+  is **`%ProgramFiles%\CopyMaster`**: the exe's build output plus CopyMasterShell.dll, which starts the CopyMaster.exe
+  beside it; registration points there, never at a bin folder (Explorer would lock it). Before 5b, `reload.ps1`
+  deployed to `%LOCALAPPDATA%\Programs\CopyMaster` (the uninstaller and check still look there). Running the real
+  install or uninstall on this laptop, registering or removing the package, or restarting Explorer: **ask Matthew
+  first**. The tests run the scripts only with `-FilesOnly -Path <scratch>` and `-WhatIf`, and set
+  `CM_TEST_NO_RESTART_DELETE=1` so a locked DLL is never really put in PendingFileRenameOperations. Every installed
+  file is named `CopyMaster*`, and the uninstaller deletes only those (a test checks the build output still fits).
+  Scripts are written for Windows PowerShell 5.1 too (no `??`, `?:`, `&&`; approved verbs, or 5.1 warns).
+- **`.\dev\reload.ps1`** builds Release and deploys over the install (wherever the menus are registered from, else
+  `%ProgramFiles%\CopyMaster`), registers (`-NoBuild`, `-Restart`, `-Unregister`, `-Configuration Debug`), and never
+  touches the package.
 - **Restarting Explorer closes all of Matthew's Explorer windows** and blanks his taskbar
   for a moment. `dev\reload.ps1` restarts it only when an Explorer has the DLL loaded (or
   with `-Restart`); say so before any run that may. Test the DLL through `tools\ShellHost`
@@ -85,16 +95,22 @@ Read PLAN.md (design and phases), TODO.md and WORKLOG.md first.
   tests use `CopyJob.EmptyClipboard` (a seam), never the real clipboard.
 - **Windows 11's compact menu needs a package** (phase 5a). `PasteCommand` (an IExplorerCommand) isn't in
   DllRegisterServer: `package\AppxManifest.xml` registers it, as a sparse package whose external location is
-  the deploy folder. `.\dev\package.ps1` builds it (makeappx from the Windows SDK, `/nv` since the DLL and exe
-  aren't in it) and registers it **unsigned** (`-AllowUnsigned`, OID in the Publisher: no certificate).
-  Registering or removing it is a system change: ask Matthew first. Removing a package ends its processes, so
-  the script refuses while CopyMaster.exe runs from the deploy folder. Developer Mode happens to be on here
-  (Terminal Dev); nothing relies on it. The CLSID is in Clsids.h *and* the manifest (a test checks).
-  Registered since 2026-11-27 as `CopyMaster_1.0.0.0_x64__gzvqk2jf034f6`.
+  the install folder. `install.ps1` (or `.\dev\package.ps1` alone) builds it (makeappx from the Windows SDK, from a
+  mapping file listing the manifest and logos; `/nv` since the DLL and exe aren't in it) and registers it
+  **unsigned** (`-AllowUnsigned`, OID in the Publisher: no certificate). Registering or removing it is a system
+  change: ask Matthew first. Removing a package ends its processes, so the scripts refuse while CopyMaster.exe runs
+  from the install folder. Developer Mode happens to be on here (Terminal Dev); nothing relies on it. The CLSID is
+  in Clsids.h *and* the manifest, the family name's hash in the module (tests check both). Registered since
+  2026-11-27 as `CopyMaster_1.0.0.0_x64__gzvqk2jf034f6`, external location `%LOCALAPPDATA%\Programs\CopyMaster`.
+  Windows' per-user record of a package's external location: `HKCU\Software\Classes\Local Settings\...\AppModel\
+  Repository\Packages\<full name>`, value `PackageRootFolder` (Get-AppxPackage doesn't show it).
+- **`-WhatIf` reaches PowerShell 7's Appx compatibility layer**, which builds its proxy module in the global session
+  state (seeing the script's `$WhatIfPreference`) and so fails to load under WhatIf. The scripts load the Appx
+  cmdlets first with `$WhatIfPreference` off for a moment.
 - **The package's Paste runs in a COM surrogate** (`DllHost.exe /Processid:{373E9CED-…}`, inside the package), not
   in Explorer, and **the CopyMaster.exe it starts runs inside the package** (parent dllhost). It shows in the
   classic menu too, so while the package is in, the classic handler's Paste keys are taken out
-  (`dev\CopyMasterSetup.psm1`, used by `package.ps1` and `reload.ps1`). `ShellHost cocreate <clsid> local`
+  (`setup\CopyMasterSetup.psm1`: install, `package.ps1` and `reload.ps1` do it). `ShellHost cocreate <clsid> local`
   activates it out of process without Explorer.
 - **Matthew's Explorer has StartAllBack**, which replaces Windows 11's compact menu with the classic one. His
   menus are all classic; the compact menu can only be seen with StartAllBack's classic menu off (a sign-out).
@@ -115,7 +131,7 @@ Read PLAN.md (design and phases), TODO.md and WORKLOG.md first.
 - **The tool shell refuses `Remove-Item` with a wildcard or several paths** ("system path ... is
   blocked"), even in the scratchpad. Remove one `-LiteralPath` at a time.
 - **regsvr32 is a GUI program**: PowerShell doesn't wait for it or set `$LASTEXITCODE`. Use
-  `Start-Process -Wait -PassThru` and its `ExitCode` (reload.ps1 does).
+  `Start-Process -Wait -PassThru` and its `ExitCode` (`Invoke-Regsvr32` in CopyMasterSetup.psm1 does).
 - **PIDLs are `__unaligned` on x64**: `unique_ptr<ITEMIDLIST>` raises C4090 (an error here);
   give the deleter `using pointer = PIDLIST_ABSOLUTE`.
 - **The `=` in `-=Programming=-` breaks link.exe's `/LIBPATH`** (LNK1104/LNK1181 on folders

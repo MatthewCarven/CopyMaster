@@ -2,6 +2,19 @@
 
 ## For Matthew
 
+- [ ] **Try the installer and the uninstaller by hand** (phase 5b, built 2026-11-27). From an elevated PowerShell in
+      the repo folder, with CopyMaster's window closed:
+      1. `.\setup\check.ps1`: what's there now (the old dev deploy in `%LOCALAPPDATA%\Programs\CopyMaster`, the
+         package, the registry keys).
+      2. `.\setup\uninstall.ps1`: takes all of that out. It asks whether to delete your settings, and whether to
+         restart Explorer if Explorer has the DLL loaded (that closes every Explorer window; say no and the DLL
+         goes at the next Windows restart instead).
+      3. `.\setup\check.ps1 -Deep`: should end "Nothing of CopyMaster's is left on this machine" (Windows' own
+         records, and deletes waiting for a restart, aside). Its output tells Claude what Windows leaves behind.
+      4. `.\setup\install.ps1`: builds Release and installs into `C:\Program Files\CopyMaster`, with the package.
+      5. A right-drag and a right-click Paste, to see it work from there.
+      6. `.\setup\uninstall.ps1`, then `.\setup\check.ps1 -Deep` again: nothing left.
+      7. `.\setup\install.ps1` once more, to keep it installed.
 - [x] **Right-drag on the Desktop once more** (the same-folder fix, deployed 2026-11-26 23:18):
       Matthew confirmed the CopyMaster items are gone for a Desktop-onto-Desktop drop. His screenshot
       (2026-11-27) of a drop onto a folder on the Desktop shows them **once**, between 7-Zip and
@@ -230,10 +243,30 @@
       (IShellDispatch2::ShellExecute through the shell's windows), as it does for the right-drag items. A DLL
       change, so an Explorer restart.
 
-## Phase 5b: installer and uninstaller
+## Phase 5b: installer and uninstaller (built 2026-11-27)
 
-- [ ] Install and uninstall scripts (PowerShell, probably enough here): files, HKLM keys (regsvr32), the
-      package (and the classic Paste's keys out while it's in); uninstall leaves nothing behind: the package
-      (and its `%LOCALAPPDATA%\Packages\CopyMaster_gzvqk2jf034f6` folder), the HKLM keys, the files (a DLL loaded in
-      Explorer can only be renamed, so a delete at reboot or an Explorer restart), and the settings folder
-      (asked, or by a switch). No certificate to remove: the package is unsigned.
+- [x] `setup\install.ps1`: builds Release, installs into `%ProgramFiles%\CopyMaster` (moved from
+      `%LOCALAPPDATA%\Programs`: PLAN.md says why), regsvr32, the package on Windows 11 (kept if it's registered
+      already from the same folder) and the classic Paste's keys out; refuses while CopyMaster runs from there, or
+      while it's registered from another folder; `-NoBuild`, `-Path`, `-NoPackage`, `-RestartExplorer`, `-WhatIf`,
+      `-FilesOnly`. Warns without the .NET 10 Desktop Runtime.
+- [x] `setup\uninstall.ps1`: the package for all users (and its data folder if Windows leaves it), regsvr32 /u and
+      anything it left (HKLM and HKCU), Explorer's cached notes on the CLSIDs, the `CopyMaster*` files of every
+      install folder (a DLL in use renamed aside and deleted at the next restart, its folder too), and the settings
+      folder if asked (`-RemoveSettings` / `-KeepSettings`); asks first whether to restart Explorer when it has the
+      DLL (`-RestartExplorer` / `-NoRestart`). Refuses while CopyMaster runs. No certificate to remove.
+- [x] `setup\check.ps1` (`-Deep` searches the registry too): every trace, CopyMaster's own apart from Windows'.
+- [x] `setup\CopyMasterSetup.psm1` (moved from `dev\`) holds it all; `dev\reload.ps1` (deploys over the install,
+      wherever it's registered from) and `dev\package.ps1` use it.
+- [x] Found and fixed: the msix held the previous build's msix (`bin\` packed along); built from a mapping file now.
+- [x] 12 tests (`SetupScriptTests`), files-only and dry runs only, in Windows PowerShell 5.1 and 7: 239 pass.
+- [ ] **Matthew's run by hand** (top of this file). Then: if `check.ps1 -Deep` shows Windows leaving the package's
+      records behind, decide whether the uninstaller should delete them (they're Windows' bookkeeping, so it doesn't).
+
+## Ideas surfaced in phase 5b (not decided)
+
+- [ ] A real installer, if CopyMaster goes to other people: a signed package (a code-signing certificate), the
+      .NET runtime checked or bundled, an entry in Settings' Installed apps. A full MSIX could carry the classic
+      handlers too (`desktop9` extensions, as NanaZip does) and Windows would add and remove everything. Not tried.
+- [ ] The uninstaller leaves other users' `%LOCALAPPDATA%\CopyMaster` alone (it only knows the current user's).
+      One user here.

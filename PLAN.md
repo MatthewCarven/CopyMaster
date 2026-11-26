@@ -93,7 +93,9 @@ also runs from a command line, so most of the testing never involves Explorer.
   is the deploy folder, so the DLL and exe stay where they are and a new DLL needs no new package. It's
   **unsigned**: the Publisher carries the OID Windows 11 accepts with `Add-AppxPackage -AllowUnsigned`, so
   no certificate is made or trusted (it needs an elevated shell, and is installed for all users).
-  `dev\package.ps1` builds it with makeappx (`/nv`: the DLL and exe aren't in it) and registers it.
+  `setup\install.ps1` (or `dev\package.ps1` alone) builds it with makeappx (`/nv`: the DLL and exe aren't
+  in it; from a mapping file naming the manifest and logos, since packing the folder took `bin\` along,
+  the last build's msix inside the next until 5b) and registers it.
   - Where to paste: the one selected folder or drive, or with no selection (a background; Explorer may
     also give an empty one) the folder the site's `IFolderView` shows, as an `IShellItem` or failing that
     through `IPersistFolder2`. The selection wins over the view. `GetState` shows it only for a folder on
@@ -111,8 +113,8 @@ also runs from a command line, so most of the testing never involves Explorer.
     out, not taken yet: have Explorer start it (IShellDispatch2::ShellExecute through the shell's windows).
   - **The package's Paste shows in the classic menu too**, beside the other packaged apps' items, so with
     both registered "Show more options" had two (as PowerToys' docs warn). So while the package is in, the
-    classic handler's three Paste keys come out (`dev\CopyMasterSetup.psm1`, used by `package.ps1` and
-    `reload.ps1`; registry only, no Explorer restart) and the package's Paste serves both menus. Without the
+    classic handler's three Paste keys come out (`setup\CopyMasterSetup.psm1`, used by the installer,
+    `package.ps1` and `reload.ps1`; registry only, no Explorer restart) and the package's Paste serves both menus. Without the
     package (Windows 10, or unregistered), regsvr32 puts them back.
   - **Matthew's laptop has no compact menu to show**: StartAllBack, loaded in Explorer, swaps Windows 11's
     compact menu for the classic one (turning that off needs a sign-out). So his menus are all classic,
@@ -134,9 +136,9 @@ also runs from a command line, so most of the testing never involves Explorer.
   `DllRegisterServer` / `DllUnregisterServer`, so `regsvr32` works and an installer can
   use it later.
 - **Deployed layout**: one folder holds CopyMaster.exe with its files and
-  CopyMasterShell.dll; the DLL starts the CopyMaster.exe beside it. For now that folder is
-  `%LOCALAPPDATA%\Programs\CopyMaster`, filled by `dev\reload.ps1`; phase 5's installer may
-  move it to Program Files. Never the build output: Explorer would lock the bin folder.
+  CopyMasterShell.dll; the DLL starts the CopyMaster.exe beside it. Since phase 5b that folder is
+  `%ProgramFiles%\CopyMaster`, filled by `setup\install.ps1` (before, `dev\reload.ps1` used
+  `%LOCALAPPDATA%\Programs\CopyMaster`). Never the build output: Explorer would lock the bin folder.
 - **Dev loop**: once Explorer loads the DLL, that copy keeps running until Explorer exits.
   `dev\reload.ps1` builds Release, moves the old DLL aside (a loaded DLL can be renamed,
   not overwritten), copies the new build in, registers it, and restarts Explorer only if
@@ -150,6 +152,46 @@ also runs from a command line, so most of the testing never involves Explorer.
   station until everything started inside it has ended, the engine included. For the end-to-end
   tests the fake engine hands the job to the real cmcopy.exe, which moves the files and empties
   (or leaves) the private clipboard.
+
+### Installing and uninstalling (phase 5b)
+
+PowerShell scripts in `setup\`, on one module, `CopyMasterSetup.psm1`, which knows every place CopyMaster
+touches (the dev scripts use it too). They're enough for this laptop; see "A real installer?" below.
+
+- **Where it goes**: `%ProgramFiles%\CopyMaster` (`-Path` for elsewhere). Decided in 5b over keeping
+  `%LOCALAPPDATA%\Programs\CopyMaster`: the registration is machine-wide (HKLM, a package for all users), so
+  the files are too; and Program Files can't be written without elevation, which matters once UAC is on: an
+  HKLM extension loads into elevated programs' file dialogs, so a DLL any user process could replace would be
+  a way up to admin. The install needs elevation anyway.
+- **`install.ps1`**: x64, elevated, the .NET 10 Desktop Runtime (warns if missing); builds Release; refuses
+  while CopyMaster.exe runs from the folder, and when CopyMaster is registered from another folder (uninstall
+  that first, or `-Path` it to update it there); copies the build (a loaded DLL renamed aside as `*.old`, as
+  `reload.ps1` always did); regsvr32; on Windows 11 builds the package and registers it with the folder as its
+  external location (kept if it's registered already, same version, same folder), then takes the classic
+  Paste's keys out. An update leaves Explorer on the old DLL until it restarts (`-RestartExplorer`).
+- **`uninstall.ps1`**: refuses while CopyMaster.exe runs from any install folder; asks first (or takes
+  switches) whether to delete the settings folder and, if Explorer has the DLL loaded, whether to restart
+  Explorer; then removes the package for all users (which ends its surrogate) and its data folder if Windows
+  left it, runs regsvr32 /u and deletes whatever registration that left (HKLM and HKCU) and Explorer's cached
+  notes on our CLSIDs, and deletes the files. It finds every install folder: where the menus are registered
+  from, where the package points, `%ProgramFiles%\CopyMaster` and the old dev folder.
+- **Only `CopyMaster*` files are deleted**, then the folder if that empties it, so a wrong `-Path` can't take
+  anything else. Every file of the build is named so (install refuses a build that isn't; a test checks).
+- **A DLL in use** (Explorer, any program's file dialog) can be renamed but not deleted: it's renamed to
+  `*.<stamp>.old`, so a reinstall before a restart can't be caught by the delete, and handed to
+  `MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT)`, as is its folder (Windows deletes a folder then only if it's empty).
+- **`check.ps1`** lists every trace, sorted by owner: CopyMaster's own (folders, registration, the package and
+  its folders, settings, running processes and DLL users, Explorer's cache); deletes waiting for a restart; and
+  Windows' own records (the taskbar's usage counts, prefetch, the package's bookkeeping if Windows leaves any),
+  listed, never touched. `-Deep` also searches the registry with reg.exe. Exit 0 when nothing of CopyMaster's
+  own is left.
+- **Dry runs and tests**: both scripts take `-WhatIf`, and `-FilesOnly -Path <folder>` lays out or removes a
+  test install with no registration or package; the tests use only those, in Windows PowerShell 5.1 and 7.
+- **A real installer?** Not for this laptop. It would be worth it if CopyMaster went to other people: the
+  unsigned package is a testing feature (a signed package means a code-signing certificate), the .NET runtime
+  would want checking or bundling, and an uninstaller should be reachable from Settings without the repo. A full
+  signed MSIX could then carry the classic handlers too (`desktop9:FileExplorerClassicContextMenuHandler` and
+  `...DragDropContextMenuHandler`, as NanaZip does; not tried here), so Windows would add and remove everything.
 
 ### The engine (CopyMaster.exe)
 
@@ -250,10 +292,14 @@ src/CopyMasterShell/              C++ DLL (vcxproj): drag-drop and paste handler
                                   Paste command, registration, the icon
 package/                          the sparse package: AppxManifest.xml and its logos (phase 5)
 assets/CopyMaster.ico             the icon, made by dev/make-icons.cs (phase 5)
+setup/install.ps1                 install into %ProgramFiles%\CopyMaster, register, the package (phase 5b)
+setup/uninstall.ps1               take all of it out again (phase 5b)
+setup/check.ps1                   list every trace of CopyMaster on the machine (phase 5b)
+setup/CopyMasterSetup.psm1        what those (and the dev scripts) share: every place CopyMaster touches
 tests/CopyMaster.Engine.Tests/    xunit
 tools/ShellHost/                  C++ test program that drives the DLL without Explorer (phase 3)
-dev/reload.ps1                    restart Explorer with a fresh DLL build (phase 3)
-dev/package.ps1                   build and register the sparse package (phase 5)
+dev/reload.ps1                    deploy a fresh build over the install, restarting Explorer if need be (phase 3)
+dev/package.ps1                   build and register the sparse package on its own (phase 5)
 dev/make-icons.cs                 draws the icon and writes the .ico and the package's logos (phase 5)
 dev/test-volumes.ps1              two VHDXs for the cross-volume and disk-full tests
 dev/window-shots.cs               renders the window's states and dialogs to PNGs, off-screen
@@ -277,7 +323,7 @@ Each is about one session. Phases 1 and 2 never touch Explorer.
 | 3 | Shell DLL, right-drag: handler, job file, launching the engine, registration, `dev\reload.ps1`, ShellHost | Done 2026-11-26: Matthew right-dragged files in Explorer and got CopyMaster (no Explorer restart needed). A drop into the items' own folder now does nothing (20 ShellHost tests) |
 | 4 | Right-click Paste: handler on folder, background and drive, clipboard read, cut → move, clipboard emptied after a cut | Done 2026-11-27: Matthew pasted a copy and a cut in Explorer, on a folder, a folder's background and the Desktop (37 new tests, ShellHost on a private window station, end to end through cmcopy) |
 | 5a | Windows 11 compact menu (`IExplorerCommand` + an unsigned sparse package), icons | Paste appears in the compact menu. Built and deployed 2026-11-27 (29 new tests): Matthew pasted with the package's Paste in his menus (classic, through StartAllBack), once, with its icon. The compact menu itself waits for a sign-out with StartAllBack's classic menu off |
-| 5b | Installer and uninstaller | Uninstall leaves nothing behind |
+| 5b | Installer and uninstaller | Uninstall leaves nothing behind. Built 2026-11-27 (`setup\`: install, uninstall, check; 12 new tests, files-only and dry runs). Matthew's run by hand (uninstall the old dev deploy, check, install, check) is still to come |
 
 Testing moves between volumes needs a second volume: the laptop has only C:. A small
 VHDX made and attached with `diskpart` works on Windows Home (no Hyper-V needed).

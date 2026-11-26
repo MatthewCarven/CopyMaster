@@ -14,8 +14,9 @@ CopyMaster's own window instead of Explorer's:
 - a check for room before starting, and a question if the disk fills up anyway;
 - long paths, dates, attributes and alternate data streams kept; follows Windows' dark mode.
 
-Right-click **Paste** (phase 4) and the Windows 11 compact menu with an installer (phase 5) are still
-to come. [PLAN.md](PLAN.md) has the design, [TODO.md](TODO.md) what's left, and
+After **Copy** or **Cut** in Explorer, right-click a folder, a folder's background or a drive and choose
+**CopyMaster Paste** (a cut becomes a move). On Windows 11 it's in the compact menu too, through a small
+package. [PLAN.md](PLAN.md) has the design, [TODO.md](TODO.md) what's left, and
 [WORKLOG.md](WORKLOG.md) how it got here.
 
 ## How it fits together
@@ -33,22 +34,30 @@ A second launch of CopyMaster.exe hands its job to the window that's already ope
 | `src/CopyMasterShell` | the Explorer extension |
 | `tools/ShellHost` | drives the extension without Explorer, for tests |
 | `tests/CopyMaster.Engine.Tests` | xUnit tests |
-| `dev` | deploy script, test volumes, window screenshots and UI Automation checks |
+| `package` | the Windows 11 package's manifest and logos |
+| `setup` | install, uninstall, and a check for anything left behind |
+| `dev` | the dev deploy, test volumes, window screenshots and UI Automation checks |
 
-## Building
+## Building and installing
 
-Windows 11, the .NET 10 SDK, and Visual Studio 2026 with the C++ desktop workload.
+Windows 11 (or 10, without the compact menu), the .NET 10 SDK, and Visual Studio 2026 with the C++
+desktop workload; the Windows SDK's makeappx for the package. From an elevated PowerShell:
 
 ```powershell
 .\build.ps1                           # everything; -Configuration Release optional
 dotnet test tests/CopyMaster.Engine.Tests
-.\dev\reload.ps1                      # build Release, install to %LOCALAPPDATA%\Programs\CopyMaster, register
-.\dev\reload.ps1 -Unregister          # take the Explorer extension out again
+.\setup\install.ps1                   # build Release, install to %ProgramFiles%\CopyMaster, register
+.\setup\uninstall.ps1                 # take it all out again (asks about your settings)
+.\setup\check.ps1                     # list anything of CopyMaster's on the machine
 ```
 
-`dotnet build` can't build the C++ projects, so `build.ps1` uses Visual Studio's MSBuild. Registering
-writes to HKLM, so it needs an elevated shell. `reload.ps1` restarts Explorer only when Explorer has an
-older copy of the extension loaded (that closes every Explorer window).
+`dotnet build` can't build the C++ projects, so `build.ps1` uses Visual Studio's MSBuild. Installing
+writes to HKLM and Program Files and registers the package for all users, so it needs an elevated shell.
+The package is unsigned (no certificate is made or trusted): Windows 11 accepts it with
+`Add-AppxPackage -AllowUnsigned`, which Microsoft describes as meant for testing. Both scripts take
+`-WhatIf`. Uninstalling while Explorer has the extension loaded asks whether to restart Explorer (which
+closes every Explorer window); otherwise the DLL is deleted when Windows next restarts.
+`.\dev\reload.ps1` redeploys a fresh build over an install while working on the extension.
 
 From a terminal: `CopyMaster.exe copy|move --dest <folder> <source>...`, or
 `cmcopy.exe copy|move --dest <folder> [--verify] [--limit <MB/s>] [--conflict skip|overwrite|rename|newer] <source>...`.

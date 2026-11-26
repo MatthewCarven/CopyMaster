@@ -1,31 +1,32 @@
 <#
-Builds CopyMaster's sparse package (package\AppxManifest.xml) and registers it, so that CopyMaster Paste
-shows in Windows 11's compact right-click menu.
+Builds CopyMaster's sparse package (package\AppxManifest.xml) and registers it, so that CopyMaster Paste shows in
+Windows 11's compact right-click menu. setup\install.ps1 does this as part of an install; this is for changing the
+package on its own.
 
   .\dev\package.ps1                 build package\bin\CopyMaster.msix and register it
   .\dev\package.ps1 -BuildOnly      just build it (the manifest is checked against Windows' schemas)
-  .\dev\package.ps1 -Unregister     remove the package (the deployed files stay)
+  .\dev\package.ps1 -Unregister     remove the package (the installed files stay; the classic Paste comes back)
   .\dev\package.ps1 -Status         say whether it's registered, and where its external location is
 
-The package holds only the manifest and three logos. Its "external location" is the deploy folder,
-%LOCALAPPDATA%\Programs\CopyMaster (or -Location), where dev\reload.ps1 puts CopyMasterShell.dll and
-CopyMaster.exe; Explorer loads the DLL from there. So a new DLL needs no new package (only an Explorer
-restart, as ever); a changed manifest does.
+The package holds only the manifest and three logos. Its "external location" is the install folder (where
+CopyMaster's menus are registered from, else %ProgramFiles%\CopyMaster; or -Location), which holds
+CopyMasterShell.dll and CopyMaster.exe; the surrogate loads the DLL from there. So a new DLL needs no new package
+(only an Explorer restart, as ever); a changed manifest does.
 
 It's unsigned: the Publisher carries the OID that marks an unsigned package, and Windows 11 installs it with
-Add-AppxPackage -AllowUnsigned. No certificate, no developer mode; it needs an elevated shell (an unsigned
-package with code in it is installed for all users), which every shell is on Matthew's laptop. Registering
-replaces any CopyMaster package already there. Removing a package ends any process running in it, so this
-refuses while CopyMaster.exe runs from the deploy folder (it may be copying).
+Add-AppxPackage -AllowUnsigned. No certificate, no developer mode; it needs an elevated shell (an unsigned package
+with code in it is installed for all users). Registering replaces any CopyMaster package already there. Removing a
+package ends any process running in it, so this refuses while CopyMaster.exe runs from the install folder (it may
+be copying).
 
 Explorer usually picks up a new package by itself; if Paste doesn't show, restart Explorer.
 
 The package's Paste shows in the classic menu too ("Show more options", or StartAllBack's classic menu), so
 registering takes the classic handler's Paste keys out (two would show), and -Unregister puts them back
-(CopyMasterSetup.psm1). Registry only: no Explorer restart.
+(setup\CopyMasterSetup.psm1). Registry only: no Explorer restart.
 #>
 param(
-    [string]$Location = (Join-Path $env:LOCALAPPDATA 'Programs\CopyMaster'),
+    [string]$Location,
     [switch]$BuildOnly,
     [switch]$Unregister,
     [switch]$Status
@@ -33,35 +34,9 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path $PSScriptRoot -Parent
-$source = Join-Path $root 'package'
-$msix = Join-Path $source 'bin\CopyMaster.msix'
-Import-Module (Join-Path $PSScriptRoot 'CopyMasterSetup.psm1') -Force
-
-function Find-SdkTool([string]$tool) {
-    $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
-    $found = Get-ChildItem $kits -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } |
-        Sort-Object { [version]$_.Name } -Descending |
-        ForEach-Object { Join-Path $_.FullName "x64\$tool" } |
-        Where-Object { Test-Path $_ } |
-        Select-Object -First 1
-    if (-not $found) { throw "$tool isn't installed (it comes with the Windows SDK)." }
-    $found
-}
-
-function Assert-NotRunning {
-    $running = Get-Process CopyMaster -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$Location\*" }
-    if ($running) {
-        throw "CopyMaster is running from $Location (pid $($running.Id -join ', ')). Close it once its jobs are done, then run this again."
-    }
-}
-
-function Remove-CopyMasterPackage {
-    foreach ($package in Get-CopyMasterPackage) {
-        Remove-AppxPackage -Package $package.PackageFullName -AllUsers
-        Write-Host "Removed $($package.PackageFullName)."
-    }
-}
+Import-Module (Join-Path $root 'setup\CopyMasterSetup.psm1') -Force
+if (-not $Location) { $Location = Get-CopyMasterInstallFolder }
+if (-not $Location) { $Location = (Get-CopyMasterPlaces).DefaultFolder }
 
 if ($Status) {
     $packages = Get-CopyMasterPackage
@@ -69,36 +44,25 @@ if ($Status) {
     foreach ($package in $packages) {
         Write-Host "$($package.PackageFullName): $($package.Status), signature $($package.SignatureKind)"
         Write-Host "  package files: $($package.InstallLocation)"
+        Write-Host "  external location: $(Get-CopyMasterPackageRoot $package)"
     }
     return
 }
 
 if ($Unregister) {
-    Assert-NotRunning
-    if (Get-CopyMasterPackage) { Remove-CopyMasterPackage } else { Write-Host 'CopyMaster''s package was not registered.' }
+    Assert-CopyMasterNotRunning $Location
+    if (Get-CopyMasterPackage) { Unregister-CopyMasterPackage } else { Write-Host 'CopyMaster''s package was not registered.' }
     Restore-ClassicPaste (Join-Path $Location 'CopyMasterShell.dll')
     return
 }
 
-# Build. /nv skips the check that every file the manifest names is in the package: the DLL and the exe
-# are in the external location instead. The schema check still runs.
-New-Item -ItemType Directory -Force (Split-Path $msix) | Out-Null
-$makeappx = Find-SdkTool 'makeappx.exe'
-$output = & $makeappx pack /d $source /p $msix /nv /o 2>&1
-if ($LASTEXITCODE -ne 0) {
-    $output | ForEach-Object { Write-Host $_ }
-    throw "makeappx couldn't build the package (exit $LASTEXITCODE)."
-}
+$msix = New-CopyMasterPackage $root
 Write-Host "Built $msix."
 if ($BuildOnly) { return }
 
 foreach ($file in 'CopyMasterShell.dll', 'CopyMaster.exe') {
-    if (-not (Test-Path (Join-Path $Location $file))) { throw "$Location has no $file. Deploy first: .\dev\reload.ps1" }
+    if (-not (Test-Path -LiteralPath (Join-Path $Location $file))) { throw "$Location has no $file. Install first: .\setup\install.ps1" }
 }
-Assert-NotRunning
-Remove-CopyMasterPackage
-Add-AppxPackage -Path $msix -ExternalLocation $Location -AllowUnsigned
-$package = Get-CopyMasterPackage | Select-Object -First 1
-if (-not $package) { throw 'Add-AppxPackage said nothing went wrong, but the package is not registered.' }
-Write-Host "Registered $($package.PackageFullName), external location $Location."
+Assert-CopyMasterNotRunning $Location
+Register-CopyMasterPackage $msix $Location
 Remove-ClassicPaste
