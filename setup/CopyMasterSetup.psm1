@@ -668,7 +668,8 @@ function Search-RegistryTrace([System.Collections.Generic.List[string]]$Shown, [
             }
         }
     }
-    $bookkeeping = 'AppModel|AppContainer|PackagedCom|StateRepository|\\Appx\\|CapAuthz|AppHost|PushNotifications|BackgroundAccessApplications|HostActivityManager|SecurityManager'
+    # AppIso: the firewall's block rules for the package's app container (HKLM\SYSTEM, named CopyMaster).
+    $bookkeeping = 'AppModel|AppContainer|PackagedCom|StateRepository|\\Appx\\|CapAuthz|AppHost|PushNotifications|BackgroundAccessApplications|HostActivityManager|SecurityManager|\\AppIso\\'
     foreach ($hit in $hits | Sort-Object) {
         $under = @($Shown | Where-Object {
             $hit -eq $_ -or $hit.StartsWith("$_\", [StringComparison]::OrdinalIgnoreCase) -or

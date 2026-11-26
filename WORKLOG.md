@@ -593,8 +593,11 @@ in HKCU AppModel\Repository (whose `PackageRootFolder` is the external location:
 SystemAppData, PolicyCache, AppContainer\Mappings and Storage, PackagedCom, AppHost\IndexedDB,
 BackgroundAccessApplications, PushNotifications\Backup, HostActivityManager; in HKLM PackageRepository, PackagedCom
 (the `{373E9CED-…}` class, `DllPath CopyMasterShell.dll`), StateRepository's cache (`PackageExternalLocation` too),
-CapAuthz, StagingInfo, Appx\PackageState. Remove-AppxPackage should take all of that; the check lists any it doesn't.
-No prefetch files, nothing pending a restart.
+CapAuthz, StagingInfo, Appx\PackageState; and in HKLM\SYSTEM two firewall block rules (in and out) for the package's
+app container (`FirewallPolicy\RestrictedServices\AppIso\FirewallRules`, Name=CopyMaster). Remove-AppxPackage should
+take all of that; the check lists any it doesn't. Also in HKLM\SYSTEM: BAM's last-run times for both CopyMaster.exe
+paths (`Services\bam\State\UserSettings\<SID>`), Windows' usage records like AppSwitched. No prefetch files, nothing
+pending a restart.
 
 **Decided: `%ProgramFiles%\CopyMaster`** instead of `%LOCALAPPDATA%\Programs\CopyMaster`: the registration is
 machine-wide (HKLM, a package for all users), so the files should be too, and with UAC on an HKLM extension loads
