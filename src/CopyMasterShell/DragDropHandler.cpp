@@ -109,7 +109,7 @@ IFACEMETHODIMP DragDropHandler::QueryContextMenu(HMENU menu, UINT index, UINT fi
     {
         return kNoMenuItems;
     }
-    return AddMenuItems(menu, index, firstId, lastId, kItems);
+    return AddMenuItems(menu, index, firstId, lastId, kItems, m_bitmap.Get());
 }
 
 IFACEMETHODIMP DragDropHandler::InvokeCommand(CMINVOKECOMMANDINFO* info)

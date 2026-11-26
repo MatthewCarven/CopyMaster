@@ -4,6 +4,10 @@
     <ProjectReference Include="..\CopyMaster.Engine\CopyMaster.Engine.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\assets\CopyMaster.ico" LogicalName="CopyMaster.ico" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -12,6 +16,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <!-- assets\CopyMaster.ico, from dev\make-icons.cs: Explorer's picture of the exe. The windows load
+         the same file, embedded below (AppIcon.cs). -->
+    <ApplicationIcon>..\..\assets\CopyMaster.ico</ApplicationIcon>
     <!-- WFO1000 wants designer serialization attributes on controls' public properties;
          the UI is built in code, with no designer. -->
     <NoWarn>$(NoWarn);WFO1000</NoWarn>

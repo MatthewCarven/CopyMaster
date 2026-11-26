@@ -7,8 +7,10 @@
 #include <string>
 
 #include "Clsids.h"
+#include "Icons.h"
 
-// "CopyMaster Paste" in the classic right-click menu (on Windows 11, under "Show more options").
+// "CopyMaster Paste" in the classic right-click menu (on Windows 11, under "Show more options"; the
+// compact menu's is PasteCommand, and both share Paste.h).
 //
 // Registered under Directory\Background (a folder's background, and the Desktop's), Directory (a
 // folder) and Drive\shellex\ContextMenuHandlers. Explorer makes one per right-click and calls
@@ -35,4 +37,5 @@ public:
 
 private:
     std::wstring m_destination; // empty: not somewhere we can paste to, so no item
+    MenuBitmap m_bitmap;        // the icon beside the item, kept while the menu may show it
 };

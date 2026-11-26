@@ -5,10 +5,12 @@
 // CopyMaster.exe; it never touches file contents (PLAN.md, "Why two parts").
 //
 //   DragDropHandler.*   the right-drag menu (phase 3)
-//   PasteHandler.*      the right-click menu's Paste (phase 4); Clipboard.* reads the clipboard
-//   ContextMenu.*, Folders.*  what the two share: menu items, where to copy to
+//   PasteHandler.*      the classic right-click menu's Paste (phase 4)
+//   PasteCommand.*      Paste in Windows 11's compact menu (phase 5), registered by the package
+//   Paste.*             what the two Pastes share; Clipboard.* reads the clipboard
+//   ContextMenu.*, Folders.*, Icons.*  what the handlers share: menu items, where to copy to, the icon
 //   JobLauncher.*       writes the job file and starts CopyMaster.exe beside this DLL
-//   Registration.*      HKLM registration for regsvr32
+//   Registration.*      HKLM registration for regsvr32 (the classic menus only)
 //
 // No DllMain: the CRT's default is enough, and with the static CRT this DLL must
 // not call DisableThreadLibraryCalls.

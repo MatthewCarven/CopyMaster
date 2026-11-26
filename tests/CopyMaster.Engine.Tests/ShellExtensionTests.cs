@@ -14,7 +14,7 @@ namespace CopyMaster.Engine.Tests;
 
 internal static class ShellBuild
 {
-    private const string Configuration =
+    public const string Configuration =
 #if DEBUG
         "Debug";
 #else

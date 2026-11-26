@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  CopyMaster's sparse package: it holds nothing but this manifest and three logos. It exists to give
+  CopyMaster a package identity, without which Windows 11 won't put a command in its compact right-click
+  menu. Registered with an "external location", the install folder (CopyMasterShell.dll and CopyMaster.exe),
+  which com:Class/@Path is relative to. dev\package.ps1 builds and registers it.
+
+  The Publisher's OID marks an unsigned package, which Windows 11 installs with Add-AppxPackage -AllowUnsigned:
+  no certificate. A signed build replaces the Publisher with its certificate's subject.
+
+  CopyMaster Paste's CLSID is COPYMASTER_PASTE_COMMAND_CLSID in src\CopyMasterShell\Clsids.h (a test checks
+  the two agree). The classic menus are registered by regsvr32, not here.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+  xmlns:desktop10="http://schemas.microsoft.com/appx/manifest/desktop/windows10/10"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  IgnorableNamespaces="uap uap10 rescap desktop4 desktop5 desktop6 desktop10 com">
+
+  <Identity
+    Name="CopyMaster"
+    Publisher="CN=CopyMaster, OID.2.25.311729368913984317654407730594956997722=1"
+    Version="1.0.0.0"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>CopyMaster</DisplayName>
+    <PublisherDisplayName>CopyMaster</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <uap10:AllowExternalContent>true</uap10:AllowExternalContent>
+    <!-- CopyMaster.exe writes its settings and job files where an unpackaged one would. -->
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
+    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
+  </Properties>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
+  </Capabilities>
+
+  <Applications>
+    <!-- No Start menu entry (AppListEntry="none"): CopyMaster starts from Explorer's menus. -->
+    <Application Id="CopyMaster" Executable="CopyMaster.exe" uap10:TrustLevel="mediumIL" uap10:RuntimeBehavior="win32App">
+      <uap:VisualElements
+        AppListEntry="none"
+        DisplayName="CopyMaster"
+        Description="Copies and moves files from Explorer's menus."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <desktop4:Extension Category="windows.fileExplorerContextMenus">
+          <desktop4:FileExplorerContextMenus>
+            <!-- A folder; a folder's background (the Desktop's too); a drive. -->
+            <desktop5:ItemType Type="Directory">
+              <desktop5:Verb Id="CopyMasterPaste" Clsid="373E9CED-1AAA-4486-9EC6-DB3A03E8E315" />
+            </desktop5:ItemType>
+            <desktop5:ItemType Type="Directory\Background">
+              <desktop5:Verb Id="CopyMasterPaste" Clsid="373E9CED-1AAA-4486-9EC6-DB3A03E8E315" />
+            </desktop5:ItemType>
+            <desktop10:ItemType Type="Drive">
+              <desktop10:Verb Id="CopyMasterPaste" Clsid="373E9CED-1AAA-4486-9EC6-DB3A03E8E315" />
+            </desktop10:ItemType>
+          </desktop4:FileExplorerContextMenus>
+        </desktop4:Extension>
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:SurrogateServer DisplayName="CopyMaster Paste">
+              <com:Class Id="373E9CED-1AAA-4486-9EC6-DB3A03E8E315" Path="CopyMasterShell.dll" ThreadingModel="STA" />
+            </com:SurrogateServer>
+          </com:ComServer>
+        </com:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+</Package>

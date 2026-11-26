@@ -157,7 +157,7 @@
       so a change to the exe alone doesn't restart Explorer.
 - [ ] An item on the Public Desktop (`C:\Users\Public\Desktop`) dragged onto the Desktop still gets the
       items (its folder isn't the user's Desktop folder), and a copy would show a second icon there.
-- [ ] Icons on the two menu items (phase 5 has icons anyway).
+- [x] Icons on the two menu items: done in phase 5a.
 - [ ] A right-drag out of the Recycle Bin: check what CF_HDROP holds there (probably the `$R...` files
       inside `$Recycle.Bin`, which would copy under those names). Not tried.
 - [ ] 7-Zip's right-drag items are registered under Directory and Drive only, so they may not show on
@@ -195,7 +195,33 @@
 - [ ] The item could say "CopyMaster Paste (move)" after a cut, but knowing that means reading the
       clipboard while the menu is built, which could hang on a hung owner. Left as one label.
 
-## Phase 5: Windows 11 compact menu, installer
+## Phase 5a: Windows 11 compact menu, icons (built 2026-11-27)
 
-- [ ] `IExplorerCommand` Paste verb + sparse package signed with a self-signed certificate.
-- [ ] Installer and uninstaller (uninstall leaves nothing behind); icons.
+- [x] `PasteCommand` (`IExplorerCommand` + `IObjectWithSite`, its own CLSID) in the same DLL; `Paste.*` shared
+      with the classic handler. Selection first, else the site's folder view (IShellItem, else IPersistFolder2).
+- [x] `package\AppxManifest.xml`: an unsigned sparse package (OID publisher, `-AllowUnsigned`: no certificate),
+      `Directory`, `Directory\Background`, `Drive` (desktop10), `com:SurrogateServer`; `dev\package.ps1` builds
+      it (makeappx, schema-checked) and registers it with the deploy folder as its external location.
+- [x] Icons: `dev\make-icons.cs` → `assets\CopyMaster.ico` and the package's logos. The exe, cmcopy and the
+      windows use it; the DLL has it as resource 101 for the compact menu (`GetIcon`) and as a bitmap beside
+      the classic items (drag-drop and paste).
+- [x] ShellHost: `--command` (site with a fake folder view, `--background`, `--empty-items`, `--site`,
+      `--site-shellfolder`), a message-box watcher that reads and closes them, `bitmap` lines, `cocreate local`.
+- [x] Tests: 29 new (227 pass, 11 opt-in skipped): the command as item and background, the desktop, a drive,
+      the places that get none, the hung owner, the message boxes, end to end through cmcopy; the manifest
+      against Clsids.h and makeappx's schema check; the icons in the DLL, the exes and the classic items.
+- [ ] **Register the package and deploy** (Matthew's yes needed: the package goes in for all users, and the
+      deploy restarts Explorer). Close CopyMaster first (pid 18920 runs from the deploy folder). Then
+      `.\dev\package.ps1`, then `.\dev\reload.ps1`.
+- [ ] Check where Explorer runs the command (explorer.exe or a dllhost surrogate), whether a CopyMaster.exe
+      started from it runs inside the package (and so would end if the package were removed mid-copy), and
+      whether its window comes to the front.
+- [ ] **Matthew: copy some files, then right-click a folder, a folder's background, a drive and the Desktop on
+      Windows 11, and see CopyMaster Paste (with its icon) in the compact menu**, not only under "Show more
+      options". Then a paste from it, and a cut. Also: does "Show more options" now show CopyMaster Paste
+      twice? If so, the classic one's keys come out (registry only, no restart).
+
+## Phase 5b: installer and uninstaller
+
+- [ ] Install and uninstall scripts (PowerShell, probably enough here): files, HKLM keys (regsvr32), the
+      package; uninstall leaves nothing behind (and the settings folder, asked or by a switch).

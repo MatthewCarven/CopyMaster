@@ -9,6 +9,7 @@
     <!-- Not "CopyMaster.exe": the two will sit in one folder, and names there ignore case. -->
     <AssemblyName>cmcopy</AssemblyName>
     <RootNamespace>CopyMaster.Cli</RootNamespace>
+    <ApplicationIcon>..\..\assets\CopyMaster.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

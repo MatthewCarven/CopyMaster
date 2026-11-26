@@ -458,3 +458,80 @@ greyed), a right-click on a folder itself, and the Desktop's background.
 the Desktop's background. Afterwards: no `errors.log`, the jobs folder empty, no crash events in the
 Application log. **Phase 4 is done.** Next is phase 5 (Windows 11's compact menu, an installer, icons), and
 the open ideas in TODO.md, such as whether a copy pasted into its own folder should make "X - Copy".
+
+## 2026-11-27: phase 5a (Windows 11's compact menu, icons): built
+
+A side session. Phase 5 split in two: **5a**, the compact menu and the icons (this), and **5b**, the
+installer and uninstaller. 5a is built and tested; the package isn't registered yet and nothing is deployed
+(both wait for Matthew's yes: the package goes in for all users, and the deploy restarts Explorer).
+
+**Found out first:**
+- **Developer Mode is already on** here (`AllowDevelopmentWithoutDevLicense` = 1; Matthew's Terminal Dev is a
+  development registration). Not relied on.
+- **Windows 11 installs an unsigned package** (`Add-AppxPackage -AllowUnsigned`) if its Publisher carries
+  `OID.2.25.311729368913984317654407730594956997722=1`; one with code in it needs an elevated shell and is
+  installed for all users. So no certificate is made or trusted, and there's no certificate for the
+  uninstaller to remove. Microsoft calls it a testing feature ("don't distribute widely"); for this laptop
+  it's the simplest thing. If `-AllowUnsigned` turns out not to mix with `-ExternalLocation`, the fallback is
+  a self-signed certificate in `LocalMachine\TrustedPeople` (its private key deleted after signing), which
+  needs Matthew's yes of its own.
+- **Three sparse packages with compact-menu commands are installed here** (Notepad++, VS Code, TreeSize), all
+  `mediumIL`/`win32App`, `runFullTrust` + `unvirtualizedResources`, `com:SurrogateServer` with
+  `ThreadingModel="STA"`. TreeSize registers `Drive` through `desktop10:ItemType`; makeappx's schema check
+  accepts that (and rejects a misspelt `desktop10` element, so the check is real).
+- **In process or in a surrogate?** Unsettled. Microsoft's pages don't say. PowerToys' developer docs say
+  Windows 11 handlers run in DllHost ("attach to DllHost.exe when the context menu is triggered"); Notepad++'s
+  crash reports name `NppShell.dll` faulting in explorer.exe (maybe its classic registration). None of the
+  three DLLs was loaded in Explorer or any dllhost when looked at (they load when the menu opens). To check
+  once ours is registered.
+- **With both kinds registered, "Show more options" shows duplicates** (PowerToys' docs, for its modules that
+  register both). To check with ours.
+
+**Built (src/CopyMasterShell):**
+- `PasteCommand` (`IExplorerCommand` + `IObjectWithSite`, CLSID `{373E9CED-1AAA-4486-9EC6-DB3A03E8E315}`), not
+  in DllRegisterServer: the package registers it. Destination: the one selected folder or drive, else (no
+  selection, or an empty one) the site's `SID_SFolderView` → `IFolderView::GetFolder` as an `IShellItem`, else
+  `IPersistFolder2::GetCurFolder`. `GetState` = `CanPaste` (never E_PENDING), `Invoke` = `PasteInto` with the
+  site's window (`IOleWindow`) as the message box's owner, `GetIcon` = `"<dll>,-101"`, `ECF_DEFAULT`, no
+  tooltip, no subcommands. Its own `CoTaskString`, so no SHLWAPI.dll.
+- `Paste.*`: `kPasteTitle`, `CanPaste`, `PasteInto` (the clipboard read, the message boxes, StartJob), out of
+  `PasteHandler`, which now calls them.
+- `Icons.*` and `CopyMasterShell.rc`: the icon as resource 101, `IconLocation()`, and `MenuBitmap` (LoadImage at
+  SM_CXSMICON, GetIconInfo/GetDIBits, premultiplied into a 32-bit DIB section; one per handler, deleted with
+  it). `AddMenuItems` takes the bitmap. A version block names the DLL ("CopyMaster Explorer extension").
+- DLL imports: GDI32 joins KERNEL32, USER32, ADVAPI32, SHELL32, ole32 and api-ms-win-core-winrt-error; still no
+  VC++ runtime. Release DLL 378 KB (was 211), mostly the icon.
+
+**The package (`package\AppxManifest.xml`, `dev\package.ps1`):** Name `CopyMaster`, x64, unsigned publisher,
+`AllowExternalContent`, both write virtualizations off, `AppListEntry="none"`, `Executable="CopyMaster.exe"`,
+`Directory` / `Directory\Background` (desktop5) and `Drive` (desktop10) naming the CLSID, `com:Class
+Path="CopyMasterShell.dll"`. The script: `-BuildOnly` (makeappx `/nv` into `package\bin`), default build and
+register (`-ExternalLocation` = the deploy folder, replacing any CopyMaster package), `-Unregister`, `-Status`;
+it refuses while CopyMaster.exe runs from the deploy folder, since removing a package ends its processes.
+
+**Icons:** `dev\make-icons.cs` draws a light sheet behind a blue one with a white arrow, from shapes on a
+256-unit grid at each size (outlines at least a pixel), and writes `assets\CopyMaster.ico` (16 to 128 px as
+32-bit DIBs with masks, 256 as PNG) and the package's three logos. CopyMaster.exe (ApplicationIcon, and
+`AppIcon.cs` loading the embedded .ico for the main window, dialogs and Details) and cmcopy carry it.
+
+**ShellHost:** `--command` drives the IExplorerCommand: a fake site (`IServiceProvider` + `IOleWindow` with a
+hidden window of its own) whose `IFolderView` gives the folder (or, `--site-shellfolder`, only its
+`IShellFolder`); `--background` (no selection), `--empty-items`, `--site <folder>`. Prints `state`, `title`,
+`icon`, `icons`, `canonical`, `flags`. A **message-box watcher** on every invoke reads each box's text and
+whether it's owned, and closes it: the compact menu has no "no UI" flag. Classic items print a `bitmap` line.
+`cocreate <clsid> local` activates out of process (for the packaged surrogate, once registered).
+
+**Found:** a message box on the private desktop never became visible (a dialog shows itself the first time its
+thread's queue runs dry), and a posted *or sent* WM_COMMAND IDOK didn't end it; a posted WM_CLOSE did (an
+OK-only box returns IDOK for that, as for Esc). The watcher looks for `#32770` with the 0xFFFF text control,
+visible or not.
+
+**Tests:** 29 new in `ShellExtensionTests.Command.cs` (227 pass, 11 opt-in skipped): a cut on a folder (move,
+`clipseq` = the clipboard's number); a background four ways (no selection, empty, shell-folder-only view, both);
+the selection beats the view; the Desktop's background; a drive; This PC, the Recycle Bin, Control Panel, a
+library and a .zip get none; two folders get none; text or nothing on the clipboard hides it; the hung owner
+(shown, then the click gives up at 3 s and says so); the clipboard losing its files (message owned by the site's
+window); no CopyMaster.exe (message names the path, no job file); title, icon location, canonical name, flags;
+the classic items' 32-bit bitmaps; end to end through cmcopy (moved, clipboard emptied); the manifest against
+Clsids.h (verbs, class, Path, Executable, AppListEntry, the OID, the logos) and makeappx's schema check; the
+icon in the DLL and both exes. Debug and Release build clean; the 76 shell tests pass on Release too.

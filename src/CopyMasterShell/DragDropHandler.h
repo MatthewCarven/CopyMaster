@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "Clsids.h"
+#include "Icons.h"
 
 // "CopyMaster Copy here" and "CopyMaster Move here" in the right-drag menu.
 //
@@ -36,4 +37,5 @@ private:
     std::wstring m_destination; // empty: not somewhere we can copy to, so no items
     std::vector<std::wstring> m_sources;
     bool m_allAlreadyThere = false; // every source is in m_destination: no items (a verb still works)
+    MenuBitmap m_bitmap;             // the icon beside the items, kept while the menu may show it
 };

@@ -39,7 +39,7 @@ internal sealed class MainForm : Form
         MinimumSize = new Size(LogicalToDeviceUnits(520), LogicalToDeviceUnits(260));
         BackColor = Theme.Window;
         StartPosition = FormStartPosition.CenterScreen;
-        Icon = SystemIcons.Application;
+        Icon = AppIcon.Value;
 
         int s(int n) => LogicalToDeviceUnits(n);
 

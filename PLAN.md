@@ -23,7 +23,8 @@ instead of Explorer's, from two places:
 explorer.exe
  └─ CopyMasterShell.dll          C++, loaded inside Explorer, kept tiny
      ├─ drag-drop handler        right-drag → "Copy here" / "Move here"
-     └─ paste handler            right-click → "Paste" (clipboard file list)
+     ├─ paste handler            right-click → "Paste" (clipboard file list), the classic menu
+     └─ paste command            the same in Windows 11's compact menu (via a sparse package)
           │  writes a job file:  %LOCALAPPDATA%\CopyMaster\jobs\<guid>.cmjob
           │  starts:             CopyMaster.exe --job <file>
           ▼
@@ -83,6 +84,38 @@ also runs from a command line, so most of the testing never involves Explorer.
 - **Paste a copy into its own folder** does nothing, as a right-drag there does (Explorer would
   make "X - Copy"). The DLL can't hide the item for it: knowing where the files are means reading
   the clipboard, which showing the menu mustn't do.
+- **Windows 11's compact menu** (phase 5; CLSID `{373E9CED-1AAA-4486-9EC6-DB3A03E8E315}`): Windows 11
+  shows only packaged apps' commands at the top level, as `IExplorerCommand`s. So `PasteCommand`
+  (`IExplorerCommand` + `IObjectWithSite`) lives in the same DLL, sharing `Paste.*` with the classic
+  handler, and a **sparse package** (`package\AppxManifest.xml`: `windows.fileExplorerContextMenus` for
+  `Directory`, `Directory\Background` and `Drive`, plus `com:SurrogateServer`/`com:Class` naming the DLL)
+  gives CopyMaster the identity. The package holds only the manifest and logos; its *external location*
+  is the deploy folder, so the DLL and exe stay where they are and a new DLL needs no new package. It's
+  **unsigned**: the Publisher carries the OID Windows 11 accepts with `Add-AppxPackage -AllowUnsigned`, so
+  no certificate is made or trusted (it needs an elevated shell, and is installed for all users).
+  `dev\package.ps1` builds it with makeappx (`/nv`: the DLL and exe aren't in it) and registers it.
+  - Where to paste: the one selected folder or drive, or with no selection (a background; Explorer may
+    also give an empty one) the folder the site's `IFolderView` shows, as an `IShellItem` or failing that
+    through `IPersistFolder2`. The selection wins over the view. `GetState` shows it only for a folder on
+    disk with files on the clipboard (the list of formats only, so never `E_PENDING`); `Invoke` is the
+    classic click (worker thread, 3 s). There's no "no UI" flag, so failures always show a message box,
+    owned by the site's window.
+  - **In process or not?** Microsoft's docs don't say; PowerToys' say Windows 11 handlers run in a
+    dllhost surrogate ("attach to DllHost.exe"), while Notepad++'s crash reports show its packaged DLL in
+    explorer.exe. Nothing here depends on it: in a surrogate the clipboard is the same (one session and
+    window station), the 3 s limit still holds, and Explorer's window still owns the message box. Two
+    things would differ in a surrogate, to check once registered: CopyMaster.exe might start inside the
+    package (and so be ended if the package is removed or replaced mid-copy), and might not come to the
+    front.
+  - The classic Paste may show twice under "Show more options" with the package in (PowerToys: both
+    kinds registered give duplicates there). If so, the classic Paste keys come out when the package
+    goes in: registry only, no Explorer restart.
+  - **The right-drag menu** is classic on Windows 11 too, so the drag-drop handler needs nothing more.
+    Nothing else belongs in the compact menu for now: Copy here / Move here exist only for a drag.
+- **Icons**: `assets\CopyMaster.ico` (from `dev\make-icons.cs`, drawn from shapes at each size, 16 to
+  256 px) is the exe's icon, the windows', and the DLL's resource 101. The compact menu gets it as
+  `"<dll>,-101"` (`GetIcon`); the classic items as a 32-bit premultiplied bitmap at the small-icon size
+  (`MenuBitmap`, one per handler, since a handler outlives the menu it fills).
 - **Job file**: UTF-8 lines: the operation, the destination, then one source path per
   line, plus the clipboard sequence number for cut-pastes. Windows file names can't
   contain line breaks, so lines are safe and need no JSON code in C++.
@@ -206,10 +239,15 @@ src/CopyMaster.Engine/            C# library: jobs, scheduler and queue, copy, v
                                   single instance and the pipe (Instance/). No UI.
 src/CopyMaster/                   C# WinForms exe: the window, dialogs, --job, copy|move
 src/CopyMaster.Cli/               cmcopy.exe: the engine from a terminal
-src/CopyMasterShell/              C++ DLL (vcxproj): drag-drop and paste handlers, registration
+src/CopyMasterShell/              C++ DLL (vcxproj): drag-drop and paste handlers, the compact menu's
+                                  Paste command, registration, the icon
+package/                          the sparse package: AppxManifest.xml and its logos (phase 5)
+assets/CopyMaster.ico             the icon, made by dev/make-icons.cs (phase 5)
 tests/CopyMaster.Engine.Tests/    xunit
 tools/ShellHost/                  C++ test program that drives the DLL without Explorer (phase 3)
 dev/reload.ps1                    restart Explorer with a fresh DLL build (phase 3)
+dev/package.ps1                   build and register the sparse package (phase 5)
+dev/make-icons.cs                 draws the icon and writes the .ico and the package's logos (phase 5)
 dev/test-volumes.ps1              two VHDXs for the cross-volume and disk-full tests
 dev/window-shots.cs               renders the window's states and dialogs to PNGs, off-screen
 dev/window-e2e.ps1                drives the real CopyMaster.exe with UI Automation
@@ -231,7 +269,8 @@ Each is about one session. Phases 1 and 2 never touch Explorer.
 | 2 | Engine UI: queue window, progress, live speed slider, pause, conflict dialog, error list, summary, single instance + named pipe, queue per drive, settings, dark mode | Matthew has run real copies and moves through the window. Built 2026-11-26 (122 tests, an end-to-end UI Automation check); his run is still to come |
 | 3 | Shell DLL, right-drag: handler, job file, launching the engine, registration, `dev\reload.ps1`, ShellHost | Done 2026-11-26: Matthew right-dragged files in Explorer and got CopyMaster (no Explorer restart needed). A drop into the items' own folder now does nothing (20 ShellHost tests) |
 | 4 | Right-click Paste: handler on folder, background and drive, clipboard read, cut → move, clipboard emptied after a cut | Done 2026-11-27: Matthew pasted a copy and a cut in Explorer, on a folder, a folder's background and the Desktop (37 new tests, ShellHost on a private window station, end to end through cmcopy) |
-| 5 | Windows 11 compact menu (`IExplorerCommand` + a self-signed sparse package), installer and uninstaller, icons | Paste appears in the compact menu; uninstall leaves nothing behind |
+| 5a | Windows 11 compact menu (`IExplorerCommand` + an unsigned sparse package), icons | Paste appears in the compact menu. Built 2026-11-27 (29 new tests); the package isn't registered yet (Matthew's go-ahead) |
+| 5b | Installer and uninstaller | Uninstall leaves nothing behind |
 
 Testing moves between volumes needs a second volume: the laptop has only C:. A small
 VHDX made and attached with `diskpart` works on Windows Home (no Hyper-V needed).

@@ -22,8 +22,10 @@ struct MenuItem
 constexpr HRESULT kNoMenuItems = MAKE_HRESULT(SEVERITY_SUCCESS, FACILITY_NULL, 0);
 
 // Inserts `items` at `index` with IDs from `firstId` (menu offset i is items[i]), if they fit below
-// `lastId`. Returns QueryContextMenu's result: the highest offset used, plus one.
-HRESULT AddMenuItems(HMENU menu, UINT index, UINT firstId, UINT lastId, std::span<const MenuItem> items) noexcept;
+// `lastId`, each with `bitmap` beside it (MenuBitmap; null for none). Returns QueryContextMenu's result:
+// the highest offset used, plus one.
+HRESULT AddMenuItems(HMENU menu, UINT index, UINT firstId, UINT lastId, std::span<const MenuItem> items,
+                     HBITMAP bitmap) noexcept;
 
 // Which of `items` InvokeCommand asks for, or -1: by menu offset (a click), or by verb (someone else's
 // code), Unicode or ANSI, ignoring case.

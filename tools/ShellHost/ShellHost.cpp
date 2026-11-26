@@ -19,11 +19,21 @@
 //         --clip-before-invoke text   the clipboard changes between the menu and the click
 //         --clip-after-invoke text    ...or after the click, before the engine has finished
 //         --wait-engine       waits for the job to run (see --job) and prints its exit code
+//   ShellHost menu|invoke --command --dll <dll> --target <target>... [--background [--empty-items]]
+//                         [--site <target>] [--site-shellfolder] --clip <what> [paste options] <file>...
+//       Windows 11's compact-menu Paste (an IExplorerCommand), as Explorer drives it: SetSite, GetState,
+//       GetTitle, GetIcon, ...; then Invoke. Without --background the selection is <target>...; with it
+//       there is none (null, or with --empty-items an empty array), as for a right-click on a background,
+//       and the site's folder view shows <target>. --site gives the site a folder of its own;
+//       --site-shellfolder makes its view hand out only the folder's IShellFolder, not an IShellItem.
+//       Like --paste, only on a private window station.
 //   ShellHost isolated <command>...
 //       Runs `ShellHost <command>...` on a window station and desktop of its own, so whatever it does
 //       to the clipboard (the window station's) stays there, and waits for it.
-//   ShellHost cocreate <clsid>
-//       CoCreateInstance through the registry, to see which registrations COM honours here.
+//   ShellHost cocreate <clsid> [inproc|local]
+//       CoCreateInstance through the registry (in-process by default; local: out of process, as a
+//       packaged surrogate class), to see which registrations COM honours here. For an IExplorerCommand
+//       (out of the way: no selection, no site) it prints its title and state too.
 //   ShellHost --job <file>
 //       Pretends to be CopyMaster.exe (copy ShellHost.exe as CopyMaster.exe beside the DLL): writes
 //       its command line to .\received\<name>.cmdline beside itself, then moves the job file there.
@@ -39,9 +49,13 @@
 //           --shell-data  the shell's own data object for <source>... (what an Explorer drag carries)
 //
 // Prints, one per line (UTF-8): "target <SFGAO hex> <file-system path or ->", "initialize <hr>",
-// "query <hr>", "item <offset> <verb> <text>", "invoke <hr>", "took <ms>" (the invoke),
-// "clipboard <sequence number> files|text|empty|other", "engine <exit code>", "cocreate <hr>",
-// "error <text>". Exit code: 0 if everything asked for succeeded, 1 if not, 2 for a bad command line.
+// "query <hr>", "item <offset> <verb> <text>", "bitmap <offset> <width>x<height> <bits a pixel>" (the
+// picture beside that item), "state <hr> hidden|enabled|other", "title <text>",
+// "icon <location>", "icons <count in that file>", "canonical <guid>", "flags <hex>", "invoke <hr>",
+// "took <ms>" (the invoke), "dialog owned|unowned <text, lines joined by ' | '>" (a message box, read
+// and answered OK), "clipboard <sequence number> files|text|empty|other", "engine <exit code>",
+// "cocreate <hr>", "error <text>". Exit code: 0 if everything asked for succeeded, 1 if not, 2 for a bad
+// command line.
 
 #include <windows.h>
 #include <oleidl.h>
@@ -67,6 +81,7 @@ using Microsoft::WRL::RuntimeClassFlags;
 
 struct __declspec(uuid(COPYMASTER_DRAGDROP_CLSID)) CopyMasterDragDrop;
 struct __declspec(uuid(COPYMASTER_PASTE_CLSID)) CopyMasterPaste;
+struct __declspec(uuid(COPYMASTER_PASTE_COMMAND_CLSID)) CopyMasterPasteCommand;
 
 namespace
 {
@@ -321,6 +336,122 @@ HRESULT ShellDataObject(const std::vector<std::wstring>& paths, IDataObject** da
     return items->BindToHandler(nullptr, BHID_DataObject, IID_PPV_ARGS(data));
 }
 
+// The folder view Explorer's site hands an IExplorerCommand (QueryService(SID_SFolderView)): only
+// GetFolder does anything. Explorer's own view gives the folder as an IShellItem; with `shellFolderOnly`,
+// only as the folder's IShellFolder (and what that implements, such as IPersistFolder2).
+class FakeFolderView final : public RuntimeClass<RuntimeClassFlags<ClassicCom>, IFolderView>
+{
+public:
+    FakeFolderView(PCIDLIST_ABSOLUTE folder, bool shellFolderOnly) : m_folder(ILCloneFull(folder)), m_shellFolderOnly(shellFolderOnly)
+    {
+    }
+
+    IFACEMETHODIMP GetFolder(REFIID iid, void** out) override
+    {
+        if (out == nullptr) return E_POINTER;
+        *out = nullptr;
+        if (!m_folder) return E_FAIL;
+        if (iid == __uuidof(IShellItem)) return m_shellFolderOnly ? E_NOINTERFACE : SHCreateItemFromIDList(m_folder.get(), iid, out);
+        ComPtr<IShellFolder> folder;
+        HRESULT result = ILIsEmpty(m_folder.get()) ? SHGetDesktopFolder(&folder)
+                                                   : SHBindToObject(nullptr, m_folder.get(), nullptr, IID_PPV_ARGS(&folder));
+        if (FAILED(result)) return result;
+        return folder.CopyTo(iid, out);
+    }
+
+    IFACEMETHODIMP GetCurrentViewMode(UINT*) override { return E_NOTIMPL; }
+    IFACEMETHODIMP SetCurrentViewMode(UINT) override { return E_NOTIMPL; }
+    IFACEMETHODIMP Item(int, PITEMID_CHILD*) override { return E_NOTIMPL; }
+    IFACEMETHODIMP ItemCount(UINT, int*) override { return E_NOTIMPL; }
+    IFACEMETHODIMP Items(UINT, REFIID, void**) override { return E_NOTIMPL; }
+    IFACEMETHODIMP GetSelectionMarkedItem(int*) override { return E_NOTIMPL; }
+    IFACEMETHODIMP GetFocusedItem(int*) override { return E_NOTIMPL; }
+    IFACEMETHODIMP GetItemPosition(PCUITEMID_CHILD, POINT*) override { return E_NOTIMPL; }
+    IFACEMETHODIMP GetSpacing(POINT*) override { return E_NOTIMPL; }
+    IFACEMETHODIMP GetDefaultSpacing(POINT*) override { return E_NOTIMPL; }
+    IFACEMETHODIMP GetAutoArrange() override { return E_NOTIMPL; }
+    IFACEMETHODIMP SelectItem(int, DWORD) override { return E_NOTIMPL; }
+    IFACEMETHODIMP SelectAndPositionItems(UINT, PCUITEMID_CHILD_ARRAY, POINT*, DWORD) override { return E_NOTIMPL; }
+
+private:
+    Pidl m_folder;
+    bool m_shellFolderOnly;
+};
+
+// An empty selection, which Explorer sometimes hands a command on a background instead of none.
+class EmptyItems final : public RuntimeClass<RuntimeClassFlags<ClassicCom>, IShellItemArray>
+{
+public:
+    IFACEMETHODIMP BindToHandler(IBindCtx*, REFGUID, REFIID, void** out) override
+    {
+        if (out != nullptr) *out = nullptr;
+        return E_NOTIMPL;
+    }
+    IFACEMETHODIMP GetPropertyStore(GETPROPERTYSTOREFLAGS, REFIID, void** out) override
+    {
+        if (out != nullptr) *out = nullptr;
+        return E_NOTIMPL;
+    }
+    IFACEMETHODIMP GetPropertyDescriptionList(REFPROPERTYKEY, REFIID, void** out) override
+    {
+        if (out != nullptr) *out = nullptr;
+        return E_NOTIMPL;
+    }
+    IFACEMETHODIMP GetAttributes(SIATTRIBFLAGS, SFGAOF, SFGAOF* attributes) override
+    {
+        if (attributes != nullptr) *attributes = 0;
+        return E_NOTIMPL;
+    }
+    IFACEMETHODIMP GetCount(DWORD* count) override
+    {
+        if (count == nullptr) return E_POINTER;
+        *count = 0;
+        return S_OK;
+    }
+    IFACEMETHODIMP GetItemAt(DWORD, IShellItem** item) override
+    {
+        if (item != nullptr) *item = nullptr;
+        return E_INVALIDARG;
+    }
+    IFACEMETHODIMP EnumItems(IEnumShellItems** items) override
+    {
+        if (items != nullptr) *items = nullptr;
+        return E_NOTIMPL;
+    }
+};
+
+// Explorer's site for a menu command: a service provider with the folder view, and the window
+// (IOleWindow) that would own a message box. The window is a hidden one of ShellHost's own.
+class FakeSite final : public RuntimeClass<RuntimeClassFlags<ClassicCom>, IServiceProvider, IOleWindow>
+{
+public:
+    FakeSite(PCIDLIST_ABSOLUTE folder, bool shellFolderOnly, HWND window)
+        : m_view(Make<FakeFolderView>(folder, shellFolderOnly)), m_window(window)
+    {
+    }
+
+    IFACEMETHODIMP QueryService(REFGUID service, REFIID iid, void** out) override
+    {
+        if (out == nullptr) return E_POINTER;
+        *out = nullptr;
+        if (service != SID_SFolderView || !m_view) return E_NOINTERFACE;
+        return m_view.CopyTo(iid, out);
+    }
+
+    IFACEMETHODIMP GetWindow(HWND* window) override
+    {
+        if (window == nullptr) return E_POINTER;
+        *window = m_window;
+        return m_window != nullptr ? S_OK : E_FAIL;
+    }
+
+    IFACEMETHODIMP ContextSensitiveHelp(BOOL) override { return E_NOTIMPL; }
+
+private:
+    ComPtr<FakeFolderView> m_view;
+    HWND m_window;
+};
+
 HRESULT ParseTarget(const std::wstring& target, Pidl& pidl)
 {
     PIDLIST_ABSOLUTE parsed = nullptr;
@@ -349,7 +480,8 @@ void DescribeTarget(PCIDLIST_ABSOLUTE pidl)
     Print(L"target " + Hex(attributes) + L" " + path);
 }
 
-HRESULT LoadHandler(const std::wstring& dll, REFCLSID clsid, IShellExtInit** handler)
+// Loads the DLL straight from its file (no registry) and makes one of its classes.
+HRESULT LoadClass(const std::wstring& dll, REFCLSID clsid, REFIID iid, void** object)
 {
     HMODULE module = LoadLibraryExW(dll.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
     if (module == nullptr) return HRESULT_FROM_WIN32(GetLastError());
@@ -358,8 +490,94 @@ HRESULT LoadHandler(const std::wstring& dll, REFCLSID clsid, IShellExtInit** han
     ComPtr<IClassFactory> factory;
     HRESULT result = getClassObject(clsid, IID_PPV_ARGS(&factory));
     if (FAILED(result)) return result;
-    return factory->CreateInstance(nullptr, IID_PPV_ARGS(handler));
+    return factory->CreateInstance(nullptr, iid, object);
 }
+
+HRESULT LoadHandler(const std::wstring& dll, REFCLSID clsid, IShellExtInit** handler)
+{
+    return LoadClass(dll, clsid, IID_PPV_ARGS(handler));
+}
+
+// ---- Message boxes --------------------------------------------------------------------------------
+
+// Watches the thread that's invoking a command for message boxes, as a person would: reads each one's
+// text, notes whether it has an owner, and presses OK. A message box on a private window station has
+// nobody to answer it, and the compact menu's Paste has no "no UI" flag to keep it quiet.
+class DialogWatcher
+{
+public:
+    explicit DialogWatcher(HWND expectedOwner) : m_thread(GetCurrentThreadId()), m_owner(expectedOwner)
+    {
+        m_stop = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        m_watching = CreateThread(nullptr, 0, Watch, this, 0, nullptr);
+    }
+    DialogWatcher(const DialogWatcher&) = delete;
+    DialogWatcher& operator=(const DialogWatcher&) = delete;
+    ~DialogWatcher() { Stop(); }
+
+    // Stops watching, then prints what it saw.
+    void Stop()
+    {
+        if (m_watching == nullptr) return;
+        SetEvent(m_stop);
+        WaitForSingleObject(m_watching, INFINITE);
+        CloseHandle(m_watching);
+        CloseHandle(m_stop);
+        m_watching = nullptr;
+        for (const auto& line : m_seen) Print(line);
+    }
+
+private:
+    static DWORD WINAPI Watch(void* parameter)
+    {
+        auto self = static_cast<DialogWatcher*>(parameter);
+        while (WaitForSingleObject(self->m_stop, 25) == WAIT_TIMEOUT)
+        {
+            EnumThreadWindows(self->m_thread, Found, reinterpret_cast<LPARAM>(self));
+        }
+        return 0;
+    }
+
+    static BOOL CALLBACK Found(HWND window, LPARAM parameter)
+    {
+        auto self = reinterpret_cast<DialogWatcher*>(parameter);
+        // A dialog (#32770) with a message box's text control. Not necessarily visible: a dialog shows
+        // itself once its thread's queue first runs dry, which on a private desktop may take a while.
+        wchar_t type[32]{};
+        GetClassNameW(window, type, ARRAYSIZE(type));
+        if (wcscmp(type, L"#32770") != 0 || GetDlgItem(window, 0xFFFF) == nullptr) return TRUE;
+        for (HWND answered : self->m_answered)
+        {
+            if (answered == window) return TRUE;
+        }
+        self->m_answered.push_back(window);
+        wchar_t text[2048]{};
+        DWORD_PTR copied = 0;
+        SendMessageTimeoutW(GetDlgItem(window, 0xFFFF), WM_GETTEXT, ARRAYSIZE(text), reinterpret_cast<LPARAM>(text),
+                            SMTO_ABORTIFHUNG, 2000, &copied);
+        std::wstring flat;
+        for (const wchar_t* c = text; *c != L'\0'; ++c)
+        {
+            if (*c == L'\r') continue;
+            if (*c == L'\n') flat += L" | ";
+            else flat += *c;
+        }
+        HWND owner = GetWindow(window, GW_OWNER);
+        const wchar_t* whose = owner == nullptr ? L"unowned" : owner == self->m_owner ? L"owned" : L"owned-elsewhere";
+        self->m_seen.push_back(std::wstring(L"dialog ") + whose + L" " + flat);
+        // Closed, as Esc would: an OK-only box then returns IDOK. (A WM_COMMAND for IDOK, posted or sent,
+        // left it open here, on a desktop where it had never been shown.)
+        PostMessageW(window, WM_CLOSE, 0, 0);
+        return TRUE;
+    }
+
+    DWORD m_thread;
+    HWND m_owner;
+    HANDLE m_stop = nullptr;
+    HANDLE m_watching = nullptr;
+    std::vector<HWND> m_answered;
+    std::vector<std::wstring> m_seen;
+};
 
 // ---- The clipboard (only ever on a private window station) ----------------------------------------
 
@@ -571,6 +789,9 @@ struct Options
     // Paste
     bool paste = false, background = false, waitEngine = false;
     Clip clip = Clip::None, clipBeforeInvoke = Clip::None, clipAfterInvoke = Clip::None;
+    // The compact menu's Paste (IExplorerCommand)
+    bool command = false, emptyItems = false, siteShellFolder = false;
+    std::wstring site;
 };
 
 // Initialize, as Explorer calls it: the right-drag handler gets the target folder and the dragged
@@ -620,6 +841,8 @@ HRESULT InitializeHandler(const Options& options, IShellExtInit* handler)
     return result;
 }
 
+int AfterInvoke(const Options& options, HRESULT result);
+
 int RunHandler(const Options& options)
 {
     ComPtr<IShellExtInit> handler;
@@ -662,6 +885,17 @@ int RunHandler(const Options& options)
         menu->GetCommandString(offset, GCS_VERBW, nullptr, reinterpret_cast<LPSTR>(verb), ARRAYSIZE(verb));
         Print(L"item " + std::to_wstring(offset) + L" " + verb + L" " + text);
         if (options.invoke && options.verb == verb) found = static_cast<int>(offset);
+        // The picture beside it: a real bitmap, not one of the HBMMENU_ stock ones (small numbers).
+        MENUITEMINFOW picture{};
+        picture.cbSize = sizeof(picture);
+        picture.fMask = MIIM_BITMAP;
+        BITMAP bitmap{};
+        if (GetMenuItemInfoW(popup, static_cast<UINT>(i), TRUE, &picture) &&
+            reinterpret_cast<UINT_PTR>(picture.hbmpItem) > 16 && GetObjectW(picture.hbmpItem, sizeof(bitmap), &bitmap) != 0)
+        {
+            Print(L"bitmap " + std::to_wstring(offset) + L" " + std::to_wstring(bitmap.bmWidth) + L"x" +
+                  std::to_wstring(bitmap.bmHeight) + L" " + std::to_wstring(bitmap.bmBitsPixel));
+        }
     }
     DestroyMenu(popup);
     if (!options.invoke) return 0;
@@ -700,12 +934,22 @@ int RunHandler(const Options& options)
         break;
     }
     ULONGLONG started = GetTickCount64();
-    result = menu->InvokeCommand(reinterpret_cast<CMINVOKECOMMANDINFO*>(&info));
-    ULONGLONG took = GetTickCount64() - started;
-    Print(L"invoke " + Hex(result));
-    Print(L"took " + std::to_wstring(took));
-    if (options.paste) PrintClipboard();
+    ULONGLONG took = 0;
+    {
+        DialogWatcher dialogs(nullptr); // only --ui lets any show
+        result = menu->InvokeCommand(reinterpret_cast<CMINVOKECOMMANDINFO*>(&info));
+        took = GetTickCount64() - started;
+        Print(L"invoke " + Hex(result));
+        Print(L"took " + std::to_wstring(took));
+    }
+    return AfterInvoke(options, result);
+}
 
+// What every paste run does once the click has happened: shows the clipboard, changes it if asked, and
+// waits for the engine if asked.
+int AfterInvoke(const Options& options, HRESULT result)
+{
+    if (options.paste) PrintClipboard();
     if (options.clipAfterInvoke != Clip::None)
     {
         PutOnClipboard(options.clipAfterInvoke, options.sources, false);
@@ -719,18 +963,165 @@ int RunHandler(const Options& options)
     return result == S_OK ? 0 : 1;
 }
 
-int CoCreate(const std::wstring& clsidText)
+const wchar_t* StateName(EXPCMDSTATE state)
+{
+    if (state & ECS_HIDDEN) return L"hidden";
+    if (state == ECS_ENABLED) return L"enabled";
+    return L"other";
+}
+
+std::wstring TakeString(LPWSTR text)
+{
+    std::wstring copy = text != nullptr ? text : L"";
+    CoTaskMemFree(text);
+    return copy;
+}
+
+// How many icons the file in an icon location ("<file>,-<id>") holds.
+UINT IconsIn(const std::wstring& location)
+{
+    size_t comma = location.find_last_of(L',');
+    std::wstring file = comma == std::wstring::npos ? location : location.substr(0, comma);
+    return ExtractIconExW(file.c_str(), -1, nullptr, nullptr, 0);
+}
+
+// The compact menu's Paste, as Explorer drives an IExplorerCommand.
+int RunExplorerCommand(const Options& options)
+{
+    ComPtr<IExplorerCommand> command;
+    HRESULT result = LoadClass(options.dll, __uuidof(CopyMasterPasteCommand), IID_PPV_ARGS(&command));
+    if (FAILED(result))
+    {
+        Print(L"error loading the command " + Hex(result));
+        return 1;
+    }
+    result = PutOnClipboard(options.clip, options.sources, options.shellData);
+    if (FAILED(result))
+    {
+        Print(L"error putting that on the clipboard " + Hex(result));
+        return 1;
+    }
+    PrintClipboard();
+
+    std::vector<Pidl> targets;
+    for (const auto& target : options.targets)
+    {
+        Pidl pidl;
+        result = ParseTarget(target, pidl);
+        if (FAILED(result))
+        {
+            Print(L"error parsing the target " + Hex(result));
+            return 1;
+        }
+        DescribeTarget(pidl.get());
+        targets.push_back(std::move(pidl));
+    }
+
+    // The selection: the targets, or for a background none at all (or an empty one).
+    ComPtr<IShellItemArray> items;
+    if (options.background && options.emptyItems)
+    {
+        items = Make<EmptyItems>();
+    }
+    else if (!options.background)
+    {
+        std::vector<PCIDLIST_ABSOLUTE> pidls;
+        for (const auto& pidl : targets) pidls.push_back(pidl.get());
+        result = SHCreateShellItemArrayFromIDLists(static_cast<UINT>(pidls.size()), pidls.data(), &items);
+        if (FAILED(result))
+        {
+            Print(L"error making the selection " + Hex(result));
+            return 1;
+        }
+    }
+
+    // The site: Explorer's folder view, showing the --site folder, or for a background the target.
+    HWND window = CreateWindowExW(0, L"STATIC", L"ShellHost site", WS_OVERLAPPED, 0, 0, 100, 100, nullptr, nullptr, nullptr, nullptr);
+    Pidl siteFolder;
+    if (!options.site.empty())
+    {
+        result = ParseTarget(options.site, siteFolder);
+        if (FAILED(result))
+        {
+            Print(L"error parsing the site " + Hex(result));
+            return 1;
+        }
+    }
+    PCIDLIST_ABSOLUTE siteShows = siteFolder ? siteFolder.get() : options.background ? targets[0].get() : nullptr;
+    ComPtr<IObjectWithSite> withSite;
+    if (siteShows != nullptr && SUCCEEDED(command.As(&withSite)))
+    {
+        ComPtr<IServiceProvider> site = Make<FakeSite>(siteShows, options.siteShellFolder, window);
+        withSite->SetSite(site.Get());
+    }
+
+    EXPCMDSTATE state = ECS_HIDDEN;
+    result = command->GetState(items.Get(), FALSE, &state);
+    Print(L"state " + Hex(result) + L" " + StateName(state));
+    LPWSTR text = nullptr;
+    HRESULT got = command->GetTitle(items.Get(), &text);
+    if (SUCCEEDED(got)) Print(L"title " + TakeString(text));
+    got = command->GetIcon(items.Get(), &text);
+    if (SUCCEEDED(got))
+    {
+        std::wstring icon = TakeString(text);
+        Print(L"icon " + icon);
+        Print(L"icons " + std::to_wstring(IconsIn(icon)));
+    }
+    GUID canonical{};
+    if (SUCCEEDED(command->GetCanonicalName(&canonical)))
+    {
+        wchar_t guid[40]{};
+        StringFromGUID2(canonical, guid, ARRAYSIZE(guid));
+        Print(std::wstring(L"canonical ") + guid);
+    }
+    EXPCMDFLAGS flags = 0;
+    if (SUCCEEDED(command->GetFlags(&flags))) Print(L"flags " + Hex(static_cast<unsigned long>(flags)));
+    if (FAILED(result)) return 1;
+    if (!options.invoke) return 0;
+
+    if (options.clipBeforeInvoke != Clip::None)
+    {
+        PutOnClipboard(options.clipBeforeInvoke, options.sources, false);
+        PrintClipboard();
+    }
+    ComPtr<IBindCtx> bind;
+    CreateBindCtx(0, &bind);
+    {
+        DialogWatcher dialogs(window);
+        ULONGLONG started = GetTickCount64();
+        result = command->Invoke(items.Get(), bind.Get());
+        ULONGLONG took = GetTickCount64() - started;
+        Print(L"invoke " + Hex(result));
+        Print(L"took " + std::to_wstring(took));
+    }
+    if (withSite) withSite->SetSite(nullptr);
+    return AfterInvoke(options, result);
+}
+
+int CoCreate(const std::wstring& clsidText, const std::wstring& where)
 {
     CLSID clsid{};
     HRESULT result = CLSIDFromString(clsidText.c_str(), &clsid);
-    if (FAILED(result))
+    if (FAILED(result) || (where != L"inproc" && where != L"local"))
     {
-        Print(L"error not a CLSID: " + clsidText);
+        Print(L"error not a CLSID and inproc|local: " + clsidText + L" " + where);
         return 2;
     }
     ComPtr<IUnknown> object;
-    result = CoCreateInstance(clsid, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&object));
+    result = CoCreateInstance(clsid, nullptr, where == L"local" ? CLSCTX_LOCAL_SERVER : CLSCTX_INPROC_SERVER,
+                              IID_PPV_ARGS(&object));
     Print(L"cocreate " + Hex(result));
+    ComPtr<IExplorerCommand> command;
+    if (SUCCEEDED(result) && SUCCEEDED(object.As(&command)))
+    {
+        // Nothing selected and no site: it should hide itself, and nothing reads the clipboard's data.
+        LPWSTR title = nullptr;
+        if (SUCCEEDED(command->GetTitle(nullptr, &title))) Print(L"title " + TakeString(title));
+        EXPCMDSTATE state = ECS_HIDDEN;
+        HRESULT got = command->GetState(nullptr, FALSE, &state);
+        Print(L"state " + Hex(got) + L" " + StateName(state));
+    }
     return SUCCEEDED(result) ? 0 : 1;
 }
 
@@ -876,16 +1267,16 @@ int Isolated(int argc, wchar_t** argv)
 int Usage()
 {
     Print(L"error usage: ShellHost menu|invoke --dll <dll> --target <target> [--verb <verb>] [--by-verb|--by-verb-ansi] "
-          L"[--ui] [--no-hdrop|--shell-data] [--paste [--background] --clip copy|cut|text|empty|hung "
-          L"[--clip-before-invoke text] [--clip-after-invoke text] [--wait-engine]] <source>... | "
-          L"isolated <command>... | cocreate <clsid> | --job <file>");
+          L"[--ui] [--no-hdrop|--shell-data] [--paste|--command [--background [--empty-items]] [--site <target>] "
+          L"[--site-shellfolder] --clip copy|cut|text|empty|hung [--clip-before-invoke text] [--clip-after-invoke text] "
+          L"[--wait-engine]] <source>... | isolated <command>... | cocreate <clsid> [inproc|local] | --job <file>");
     return 2;
 }
 
 int RunCommand(int argc, wchar_t** argv)
 {
     std::wstring command = argv[1];
-    if (command == L"cocreate" && argc == 3) return CoCreate(argv[2]);
+    if (command == L"cocreate" && (argc == 3 || argc == 4)) return CoCreate(argv[2], argc == 4 ? argv[3] : L"inproc");
     if (command != L"menu" && command != L"invoke") return Usage();
 
     Options options;
@@ -922,20 +1313,27 @@ int RunCommand(int argc, wchar_t** argv)
         else if (arg == L"--clip-before-invoke") clip(options.clipBeforeInvoke);
         else if (arg == L"--clip-after-invoke") clip(options.clipAfterInvoke);
         else if (arg == L"--wait-engine") options.waitEngine = true;
+        else if (arg == L"--command") options.command = options.paste = true;
+        else if (arg == L"--empty-items") options.emptyItems = true;
+        else if (arg == L"--site") value(options.site);
+        else if (arg == L"--site-shellfolder") options.siteShellFolder = true;
         else if (arg.rfind(L"--", 0) == 0) ok = false;
         else options.sources.push_back(arg);
     }
-    ok = ok && !options.dll.empty() && !options.targets.empty() && (!options.invoke || !options.verb.empty());
+    // A command needs no verb: it is the item.
+    ok = ok && !options.dll.empty() && !options.targets.empty() &&
+         (!options.invoke || options.command || !options.verb.empty());
     // One target, except for a right-click on several selected items.
     ok = ok && (options.targets.size() == 1 || (options.paste && !options.background));
     ok = ok && (options.paste ? options.clip != Clip::None : options.clip == Clip::None);
+    ok = ok && (options.command || (!options.emptyItems && options.site.empty() && !options.siteShellFolder));
     if (!ok) return Usage();
     if (options.paste && !OnPrivateStation())
     {
         Print(L"error --paste changes the clipboard, so it runs only on a private window station: ShellHost isolated ...");
         return 2;
     }
-    return RunHandler(options);
+    return options.command ? RunExplorerCommand(options) : RunHandler(options);
 }
 
 } // namespace

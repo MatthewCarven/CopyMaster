@@ -83,7 +83,20 @@ Read PLAN.md (design and phases), TODO.md and WORKLOG.md first.
   refuses `--paste` anywhere else. With `CM_SHELLHOST_ENGINE=<cmcopy.exe>` and `--wait-engine`, the fake
   engine runs the real cmcopy on the job (end to end, clipboard emptying included). The engine's own
   tests use `CopyJob.EmptyClipboard` (a seam), never the real clipboard.
-- **The shell tests (`ShellExtensionTests`, `.Paste.cs`) use the built DLL and ShellHost**, and skip
+- **Windows 11's compact menu needs a package** (phase 5a). `PasteCommand` (an IExplorerCommand) isn't in
+  DllRegisterServer: `package\AppxManifest.xml` registers it, as a sparse package whose external location is
+  the deploy folder. `.\dev\package.ps1` builds it (makeappx from the Windows SDK, `/nv` since the DLL and exe
+  aren't in it) and registers it **unsigned** (`-AllowUnsigned`, OID in the Publisher: no certificate).
+  Registering or removing it is a system change: ask Matthew first. Removing a package ends its processes, so
+  the script refuses while CopyMaster.exe runs from the deploy folder. Developer Mode happens to be on here
+  (Terminal Dev); nothing relies on it. The CLSID is in Clsids.h *and* the manifest (a test checks).
+- **ShellHost drives the command too**: `ShellHost isolated menu|invoke --command --dll <dll> --target <folder>
+  [--background [--empty-items]] [--site <folder>] [--site-shellfolder] --clip ...`. The compact menu has no
+  "no UI" flag, so every invoke runs a watcher that reads each message box (a `dialog` line) and closes it with
+  WM_CLOSE (a WM_COMMAND IDOK, posted or sent, didn't end a box on the private desktop, where it never shows).
+- **Icons**: `dotnet run --file dev\make-icons.cs` (from the repo folder) redraws `assets\CopyMaster.ico` and
+  `package\Assets\*.png`; the outputs are committed. The DLL embeds the .ico as resource 101 (`"<dll>,-101"`).
+- **The shell tests (`ShellExtensionTests`, `.Paste.cs`, `.Command.cs`) use the built DLL and ShellHost**, and skip
   if they're missing. `dotnet test` doesn't build C++: run `.\build.ps1` after changing the DLL. It
   does build cmcopy (a build-only reference) for the end-to-end paste tests.
 - **Clipboard reads in the DLL go through `Clipboard.h`**: the menu asks only

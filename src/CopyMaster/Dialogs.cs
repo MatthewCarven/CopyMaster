@@ -11,6 +11,7 @@ internal class DialogBase : Form
     protected DialogBase(string title)
     {
         Text = title;
+        Icon = AppIcon.Value;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
@@ -208,6 +209,7 @@ internal sealed class DetailsForm : Form
     {
         _job = job;
         Text = "Details · " + JobText.Title(job.Spec);
+        Icon = AppIcon.Value;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
         MinimizeBox = false;

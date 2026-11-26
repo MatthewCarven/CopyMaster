@@ -7,7 +7,8 @@
 
 #include "ContextMenu.h"
 
-HRESULT AddMenuItems(HMENU menu, UINT index, UINT firstId, UINT lastId, std::span<const MenuItem> items) noexcept
+HRESULT AddMenuItems(HMENU menu, UINT index, UINT firstId, UINT lastId, std::span<const MenuItem> items,
+                     HBITMAP bitmap) noexcept
 {
     UINT count = static_cast<UINT>(items.size());
     if (menu == nullptr || count == 0 || lastId < firstId || lastId - firstId < count - 1) return kNoMenuItems;
@@ -20,6 +21,11 @@ HRESULT AddMenuItems(HMENU menu, UINT index, UINT firstId, UINT lastId, std::spa
         item.fType = MFT_STRING;
         item.wID = firstId + i;
         item.dwTypeData = const_cast<LPWSTR>(items[i].text);
+        if (bitmap != nullptr)
+        {
+            item.fMask |= MIIM_BITMAP;
+            item.hbmpItem = bitmap;
+        }
         if (!InsertMenuItemW(menu, index + i, TRUE, &item)) break;
         ++added;
     }

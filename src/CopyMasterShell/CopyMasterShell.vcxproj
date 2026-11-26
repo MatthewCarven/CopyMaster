@@ -87,7 +87,10 @@
     <ClCompile Include="DragDropHandler.cpp" />
     <ClCompile Include="JobLauncher.cpp" />
     <ClCompile Include="Folders.cpp" />
+    <ClCompile Include="Icons.cpp" />
     <ClCompile Include="Module.cpp" />
+    <ClCompile Include="Paste.cpp" />
+    <ClCompile Include="PasteCommand.cpp" />
     <ClCompile Include="PasteHandler.cpp" />
     <ClCompile Include="Registration.cpp" />
   </ItemGroup>
@@ -97,13 +100,21 @@
     <ClInclude Include="ContextMenu.h" />
     <ClInclude Include="DragDropHandler.h" />
     <ClInclude Include="Folders.h" />
+    <ClInclude Include="Icons.h" />
     <ClInclude Include="JobLauncher.h" />
     <ClInclude Include="Module.h" />
+    <ClInclude Include="Paste.h" />
+    <ClInclude Include="PasteCommand.h" />
     <ClInclude Include="PasteHandler.h" />
     <ClInclude Include="Registration.h" />
+    <ClInclude Include="resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="CopyMasterShell.rc" />
   </ItemGroup>
   <ItemGroup>
     <None Include="CopyMasterShell.def" />
+    <None Include="..\..\assets\CopyMaster.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
