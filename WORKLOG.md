@@ -445,3 +445,11 @@ build byte for byte; HKLM has the three paste keys and the drag-drop ones; `Shel
 classes from the registry; on a private window station the deployed DLL offers CopyMaster Paste on the Desktop's
 background (the Desktop folder) for files, and nothing for text. The new Explorer loads the DLL on its first
 right-click. Left: Matthew's pastes in Explorer.
+
+**Matthew's first paste (01:46): it worked.** He copied the Desktop's Music folder (Explorer's classic menu,
+Copy), right-clicked the background of `Desktop\-=Programming=-`, and the classic menu showed **CopyMaster
+Paste** between "Open Git Bash here" and "Give access to". It started the deployed CopyMaster.exe (pid 18920,
+01:46:43, the same second `-=Programming=-\Music` was made): Copy "Music", 24.5 GB, 3,093 items, verifying,
+863 MB/s. Explorer (pid 6732) has the new DLL loaded; the jobs folder is empty, there's no `errors.log`, and the
+Application log has no crash. C: had 44.2 GB free mid-copy. Still to try: a cut (a move, then Explorer's Paste
+greyed), a right-click on a folder itself, and the Desktop's background.

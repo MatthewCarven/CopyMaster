@@ -181,6 +181,10 @@
       and the Desktop, and choose CopyMaster Paste** ("Show more options" on Windows 11, or
       Shift+right-click). After a cut, Explorer's own Paste should be greyed once CopyMaster has moved
       the files. Deployed 2026-11-27 01:44 (Explorer restarted).
+      **First paste worked (01:46):** Matthew copied the Desktop's Music folder, right-clicked
+      `-=Programming=-`'s background (CopyMaster Paste sat between "Open Git Bash here" and "Give access
+      to"), and got a CopyMaster job: 24.5 GB, 3,093 items, 863 MB/s. **Still to try: a cut, a
+      right-click on a folder itself, and the Desktop's background.**
 
 ## Ideas surfaced in phase 4 (not decided)
 
